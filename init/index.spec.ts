@@ -148,6 +148,7 @@ describe('init foundation', () => {
     expect(plan.generated['src/app.module.ts']).toContain("config.getOrThrow('env'");
     expect(plan.generated['src/app.module.ts']).not.toContain('TypeOrmModule');
     expect(plan.generated['package.json']).not.toContain('node-flow');
+    expect(JSON.parse(plan.generated['package.json']).scripts.format).toBe('prettier --write . --ignore-unknown');
     expect(plan.generated['src/health/health.controller.ts']).toContain('HealthCheckService');
     expect(plan.generated['src/health/health.module.ts']).toContain('TerminusModule');
     expect(plan.generated['src/health/health.controller.ts']).toContain("@ApiTags('health')");
@@ -332,6 +333,77 @@ describe('init foundation', () => {
     expect(existsSync(join(root, 'ai/knowledge/INDEX.md'))).toBe(true);
   });
 
+  it('formats the full project after installation and feature generation', async () => {
+    const root = project();
+    const order: string[] = [];
+    const install = vi.fn(() => order.push('install'));
+    const runFeature = vi.fn(() => { order.push('feature'); });
+    const format = vi.fn(() => {
+      order.push('format');
+      expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(true);
+      expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(false);
+    });
+
+    await initialize({
+      root,
+      packageVersion: '0.1.0',
+      dryRun: false,
+      resume: false,
+      skipInstall: false,
+      dummyFeature: 'examples',
+      install,
+      runFeature,
+      format,
+    });
+
+    expect(order).toEqual(['install', 'feature', 'format']);
+    expect(format).toHaveBeenCalledWith(root, 'npm');
+    expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(true);
+  });
+
+  it('keeps initialization recovery metadata when formatting fails', async () => {
+    const root = project();
+    await expect(initialize({
+      root,
+      packageVersion: '0.1.0',
+      dryRun: false,
+      resume: false,
+      skipInstall: false,
+      install: vi.fn(),
+      runFeature: () => undefined,
+      format: () => { throw new Error('simulated format failure'); },
+    })).rejects.toThrow('simulated format failure');
+    expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(true);
+    expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(false);
+  });
+
+  it('formats after adding a preset when installation is enabled', async () => {
+    const root = project();
+    await initialize({ root, packageVersion: '0.1.0', dryRun: false, resume: false, skipInstall: true, runFeature: () => undefined });
+    const order: string[] = [];
+    await addPresets({
+      root,
+      names: ['rate-limit'],
+      dryRun: false,
+      skipInstall: false,
+      install: vi.fn(() => order.push('install')),
+      format: vi.fn(() => order.push('format')),
+    });
+    expect(order).toEqual(['install', 'format']);
+  });
+
+  it('does not run formatting for dry runs or when installation is skipped', async () => {
+    const dryRoot = project();
+    const dryFormat = vi.fn();
+    await initialize({ root: dryRoot, packageVersion: '0.1.0', dryRun: true, resume: false, skipInstall: false, runFeature: () => undefined, format: dryFormat });
+    expect(dryFormat).not.toHaveBeenCalled();
+
+    const skippedRoot = project();
+    const skippedFormat = vi.fn();
+    await initialize({ root: skippedRoot, packageVersion: '0.1.0', dryRun: false, resume: false, skipInstall: true, runFeature: () => undefined, format: skippedFormat });
+    expect(skippedFormat).not.toHaveBeenCalled();
+  });
+
   it('rejects repeated initialization', () => {
     const root = project();
     writeFileSync(join(root, '.nest-cqrs.json'), '{}');
@@ -361,6 +433,7 @@ describe('init foundation', () => {
       skipInstall: false,
       runFeature: () => undefined,
       install: () => undefined,
+      format: vi.fn(),
     });
     expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(false);
     expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(true);
@@ -418,6 +491,7 @@ describe('init foundation', () => {
       runFeature: () => undefined,
       install: vi.fn(),
       approveBuilds: vi.fn(),
+      format: vi.fn(),
     });
     expect(install).toHaveBeenCalledTimes(2);
     expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(false);

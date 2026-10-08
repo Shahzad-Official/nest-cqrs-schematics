@@ -17,7 +17,7 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
   packageJson.scripts = {
     ...packageJson.scripts,
     build: 'nest build',
-    format: 'prettier --write "src/**/*.ts" "test/**/*.ts"',
+    format: 'prettier --write . --ignore-unknown',
     start: 'nest start',
     'start:dev': 'nest start --watch',
     'start:debug': 'nest start --debug --watch',
@@ -165,6 +165,18 @@ export function installDependencies(root, packageManager) {
   }
 }
 
+export function formatProject(root, packageManager) {
+  const command = packageManager === 'npm' ? 'npm' : packageManager;
+  const args = packageManager === 'npm' ? ['run', 'format'] : ['format'];
+  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', shell: false });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Project formatting failed with status ${result.status}.`);
+  }
+}
+
 export function approvePnpmBuilds(root, spawn = spawnSync) {
   const result = spawn('pnpm', ['approve-builds', '--all'], {
     cwd: root,
@@ -228,7 +240,7 @@ export function detectPackageManager(root) {
   return 'npm';
 }
 
-export async function initialize({ root, packageVersion, dryRun, resume, skipInstall, dummyFeature, selectedPresets = [], databaseOptions = {}, runFeature, install = installDependencies, approveBuilds = approvePnpmBuilds }) {
+export async function initialize({ root, packageVersion, dryRun, resume, skipInstall, dummyFeature, selectedPresets = [], databaseOptions = {}, runFeature, install = installDependencies, approveBuilds = approvePnpmBuilds, format = formatProject }) {
   preflight(root, resume);
   if (resume) {
     const pending = JSON.parse(readFileSync(resolve(root, pendingPath), 'utf8'));
@@ -256,8 +268,8 @@ export async function initialize({ root, packageVersion, dryRun, resume, skipIns
     databaseOptions,
     dummyFeature,
   }, null, 2)}\n`);
+  const packageManager = detectPackageManager(root);
   if (!skipInstall) {
-    const packageManager = detectPackageManager(root);
     try {
       install(root, packageManager);
     } catch (error) {
@@ -269,13 +281,14 @@ export async function initialize({ root, packageVersion, dryRun, resume, skipIns
     }
   }
   if (dummyFeature) await runFeature(dummyFeature);
+  if (!skipInstall) format(root, packageManager);
 
   writeFileSync(resolve(root, manifestPath), `${JSON.stringify(plan.manifest, null, 2)}\n`);
   rmSync(resolve(root, pendingPath));
   return { operations, complete: true };
 }
 
-export async function addPresets({ root, names, dryRun, skipInstall, databaseOptions = {}, install = installDependencies }) {
+export async function addPresets({ root, names, dryRun, skipInstall, databaseOptions = {}, install = installDependencies, format = formatProject }) {
   for (const name of names) if (!presetNames.includes(name)) throw new Error(`Unknown preset: ${name}. Available: ${presetNames.join(', ')}`);
   const manifestFile = resolve(root, manifestPath);
   if (!existsSync(manifestFile)) throw new Error('Run nest-cqrs init before adding presets.');
@@ -344,7 +357,11 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     return `${existed ? 'UPDATE' : 'CREATE'} ${path}`;
   });
   if (dryRun) return { operations, complete: false };
-  if (!skipInstall) install(root, detectPackageManager(root));
+  if (!skipInstall) {
+    const packageManager = detectPackageManager(root);
+    install(root, packageManager);
+    format(root, packageManager);
+  }
   manifest.presets ??= {};
   for (const name of applied) manifest.presets[name] = {
     version: PRESET_VERSION,
