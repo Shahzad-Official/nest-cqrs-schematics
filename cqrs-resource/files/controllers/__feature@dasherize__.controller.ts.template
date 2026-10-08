@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-<% if (swagger) { %>import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+<% if (swagger) { %>import { ApiOperation, ApiTags } from '@nestjs/swagger';
+<% } %>
+<% if (swagger) { %>import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../../../common/decorators/api-response.decorator.js';
 <% } %>
 import { Create<%= classify(name) %>Command } from '../commands/create-<%= dasherize(name) %>/create-<%= dasherize(name) %>.command.js';
 import { Delete<%= classify(name) %>Command } from '../commands/delete-<%= dasherize(name) %>/delete-<%= dasherize(name) %>.command.js';
@@ -22,8 +24,8 @@ export class <%= classify(feature) %>Controller {
 
   @Post()
 <% if (swagger) { %>  @ApiOperation({ summary: 'Create <%= dasherize(name) %>' })
-  @ApiCreatedResponse({ description: '<%= classify(name) %> created successfully', type: String })
-  @ApiBadRequestResponse({ description: 'Invalid request body' })
+  @ApiSuccessEnvelope({ status: 201, description: '<%= classify(name) %> created successfully', data: { type: 'string' } })
+  @ApiErrorEnvelope(400, 'Invalid request body')
 <% } %>
   create(@Body() create<%= classify(name) %>Dto: Create<%= classify(name) %>Dto): Promise<string> {
     return this.commandBus.execute(new Create<%= classify(name) %>Command(create<%= classify(name) %>Dto));
@@ -31,7 +33,7 @@ export class <%= classify(feature) %>Controller {
 
   @Get()
 <% if (swagger) { %>  @ApiOperation({ summary: 'List <%= dasherize(feature) %>' })
-  @ApiOkResponse({ description: '<%= classify(feature) %> returned successfully', type: String })
+  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(feature) %> returned successfully', data: { type: 'string' } })
 <% } %>
   findAll(): Promise<string> {
     return this.queryBus.execute(new List<%= classify(feature) %>Query());
@@ -39,8 +41,8 @@ export class <%= classify(feature) %>Controller {
 
   @Get(':id')
 <% if (swagger) { %>  @ApiOperation({ summary: 'Get <%= dasherize(name) %> by ID' })
-  @ApiOkResponse({ description: '<%= classify(name) %> returned successfully', type: String })
-  @ApiBadRequestResponse({ description: 'Invalid ID' })
+  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> returned successfully', data: { type: 'string' } })
+  @ApiErrorEnvelope(400, 'Invalid ID')
 <% } %>
   findOne(@Param() params: <%= classify(name) %>ParamsDto): Promise<string> {
     return this.queryBus.execute(new Get<%= classify(name) %>Query(params.id));
@@ -48,8 +50,8 @@ export class <%= classify(feature) %>Controller {
 
   @Patch(':id')
 <% if (swagger) { %>  @ApiOperation({ summary: 'Update <%= dasherize(name) %>' })
-  @ApiOkResponse({ description: '<%= classify(name) %> updated successfully', type: String })
-  @ApiBadRequestResponse({ description: 'Invalid ID or request body' })
+  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> updated successfully', data: { type: 'string' } })
+  @ApiErrorEnvelope(400, 'Invalid ID or request body')
 <% } %>
   update(
     @Param() params: <%= classify(name) %>ParamsDto,
@@ -62,8 +64,8 @@ export class <%= classify(feature) %>Controller {
 
   @Delete(':id')
 <% if (swagger) { %>  @ApiOperation({ summary: 'Delete <%= dasherize(name) %>' })
-  @ApiOkResponse({ description: '<%= classify(name) %> deleted successfully', type: String })
-  @ApiBadRequestResponse({ description: 'Invalid ID' })
+  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> deleted successfully', data: { type: 'string' } })
+  @ApiErrorEnvelope(400, 'Invalid ID')
 <% } %>
   remove(@Param() params: <%= classify(name) %>ParamsDto): Promise<string> {
     return this.commandBus.execute(new Delete<%= classify(name) %>Command(params.id));

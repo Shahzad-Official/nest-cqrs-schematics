@@ -122,11 +122,14 @@ Update the values before starting the application. Do not commit real secrets.
 pnpm start:dev
 ```
 
-The generated health endpoint uses the configured API prefix. With the example configuration, it is available at:
+The generated health endpoints use the configured API prefix. With the example configuration, they are available at:
 
 ```text
-GET /api/health
+GET /api/health/live
+GET /api/health/ready
 ```
+
+Liveness checks only the application process. Readiness checks selected required integrations, such as the configured database.
 
 Swagger is installed by the foundation. When `SWAGGER_ENABLED=true`, its UI is available at:
 
@@ -270,6 +273,8 @@ src/features/orders/
 
 It includes the feature module, controller, DTOs, entity, commands, queries, handlers, and optional handler tests. The feature module is registered in the nearest Nest module.
 
+This generated feature is an **illustrative CQRS scaffold**. Its handlers return placeholder values to show the request flow; they are not production business logic or a persistence-backed reference implementation.
+
 Generate only the CQRS module and entity:
 
 ```bash
@@ -320,6 +325,12 @@ pnpm migration:run:prod
 ```
 
 Replace `pnpm` with `npm run` or `yarn` when using another package manager.
+
+Database-enabled projects also receive a separate `test:integration` command. Fast scaffold E2E tests do not connect to a database. Real database integration tests run only when explicitly requested with `RUN_DATABASE_INTEGRATION=true` and complete `DB_*` connection variables:
+
+```bash
+RUN_DATABASE_INTEGRATION=true pnpm test:integration
+```
 
 ## Environment configuration
 

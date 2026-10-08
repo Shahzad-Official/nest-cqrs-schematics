@@ -125,7 +125,8 @@ describe('cqrs-resource schematic', () => {
     const createDto = tree.readContent('/src/features/orders/dtos/create-order.dto.ts');
     expect(controller).toContain("@ApiTags('orders')");
     expect(controller).toContain("@ApiOperation({ summary: 'Create order' })");
-    expect(controller).toContain('@ApiCreatedResponse');
+    expect(controller).toContain('@ApiSuccessEnvelope({ status: 201');
+    expect(controller).toContain("@ApiErrorEnvelope(400, 'Invalid request body')");
     expect(createDto).toContain("import { ApiProperty } from '@nestjs/swagger'");
     expect(createDto).toContain("@ApiProperty({ example: 'Example' })");
   });

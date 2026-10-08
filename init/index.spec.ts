@@ -137,8 +137,9 @@ describe('init foundation', () => {
     expect(plan.generated['src/config/env.d.ts']).toContain('declare global');
     expect(plan.generated['src/config/env.d.ts']).toContain('interface ProcessEnv');
     expect(plan.generated['src/config/env.validation.ts']).toContain("NODE_ENV: Joi.string()");
-    expect(plan.generated['src/config/env.validation.ts']).toContain('.valid(\'development\', \'staging\', \'production\')');
+    expect(plan.generated['src/config/env.validation.ts']).toContain(".valid('development', 'staging', 'production', 'test')");
     expect(plan.generated['src/config/env.validation.ts']).toContain('.required()');
+    expect(plan.generated['src/config/env.validation.ts']).toContain('oxlint-disable-next-line unicorn/no-thenable');
     expect(plan.generated['src/config/env.validation.ts']).not.toContain('APP_ENV');
     expect(plan.generated['src/config/env-file-path.ts']).toContain('process.env.NODE_ENV');
     expect(plan.generated['src/config/env-file-path.ts']).not.toContain('APP_ENV');
@@ -148,11 +149,25 @@ describe('init foundation', () => {
     expect(plan.generated['src/config/configuration.ts']).not.toContain('as EnvConfig[');
     expect(plan.generated['src/app.module.ts']).toContain("config.getOrThrow('env'");
     expect(plan.generated['src/app.module.ts']).not.toContain('TypeOrmModule');
+    expect(plan.generated['src/app.module.ts']).not.toContain('ThrottlerGuard');
     expect(plan.generated['package.json']).not.toContain('node-flow');
+    expect(JSON.parse(plan.generated['tsconfig.json']).compilerOptions.baseUrl).toBeUndefined();
     expect(JSON.parse(plan.generated['package.json']).scripts.format).toBe('prettier --write . --ignore-unknown');
     expect(plan.generated['src/health/health.controller.ts']).toContain('HealthCheckService');
     expect(plan.generated['src/health/health.module.ts']).toContain('TerminusModule');
-    expect(plan.generated['src/health/health.controller.ts']).toContain("@ApiTags('health')");
+    expect(plan.generated['src/health/health.controller.ts']).toContain("@Get('live')");
+    expect(plan.generated['src/health/health.controller.ts']).toContain("@Get('ready')");
+    expect(plan.generated['src/health/health.controller.ts']).toContain('@ApiSuccessEnvelope');
+    expect(plan.generated['test/setup-env.ts']).toContain("NODE_ENV: 'test'");
+    expect(plan.generated['test/setup-env.ts']).toContain("SWAGGER_ENABLED: 'true'");
+    expect(plan.generated['test/setup-env.ts']).toContain("CORS_ORIGINS: ''");
+    expect(plan.generated['test/setup-env.ts']).toContain("DB_HOST: '127.0.0.1'");
+    expect(plan.generated['vitest.config.e2e.ts']).toContain("setupFiles: ['./test/setup-env.ts']");
+    expect(plan.generated['.env.test.example']).toBeUndefined();
+    expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiSuccessEnvelope');
+    expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiErrorEnvelope');
+    expect(plan.generated['test/app.e2e-spec.ts']).toContain("#/components/schemas/ApiSuccessResponse");
+    expect(plan.generated['test/app.e2e-spec.ts']).toContain("#/components/schemas/ApiErrorResponse");
     expect(plan.generated['src/common/interfaces/api-response.interface.ts']).toContain('@ApiProperty');
     expect(plan.generated['.env.example']).toContain('NODE_ENV="development"');
     expect(plan.generated['.env.example']).toContain('PORT=3000');
@@ -164,6 +179,9 @@ describe('init foundation', () => {
     const plan = buildPlan(root, '0.1.0', 'examples', ['database', 'rate-limit'], { type: 'postgres', migrations: true });
     expect(plan.generated['src/app.module.ts']).toContain('TypeOrmModule.forRootAsync');
     expect(plan.generated['src/app.module.ts']).toContain('ThrottlerModule.forRoot');
+    expect(plan.generated['src/app.module.ts']).toContain('{ provide: APP_GUARD, useClass: ThrottlerGuard }');
+    expect(plan.generated['test/rate-limit.e2e-spec.ts']).toContain("expect(429)");
+    expect(plan.generated['test/rate-limit.e2e-spec.ts']).toContain('requestNumber < 100');
     expect(plan.generated['src/instrumentation.ts']).toBeUndefined();
     expect(plan.generated['compose.jaeger.yml']).toBeUndefined();
     expect(plan.generated['src/database/data-source.ts']).toContain('type: databaseType');
@@ -171,6 +189,17 @@ describe('init foundation', () => {
     expect(plan.generated['src/config/env.d.ts']).toContain('DB_HOST: string');
     expect(plan.generated['src/config/configuration.ts']).toContain('host: parsed.DB_HOST');
     expect(plan.generated['src/config/env.validation.ts']).toContain('DB_HOST: Joi.string().required()');
+    expect(plan.generated['src/app.module.ts']).toContain('manualInitialization:');
+    expect(plan.generated['src/health/health.controller.ts']).toContain("live(): Promise<HealthCheckResult>");
+    expect(plan.generated['src/health/health.controller.ts']).toContain("ready(): Promise<HealthCheckResult>");
+    expect(plan.generated['src/health/health.controller.ts']).toContain("this.health.check([])");
+    expect(plan.generated['src/health/health.controller.ts']).toContain("this.db.pingCheck('database'");
+    expect(plan.generated['test/app.e2e-spec.ts']).not.toContain("GET /api/health/ready");
+    expect(plan.generated['test/app.e2e-spec.ts']).toContain('getDataSourceToken()');
+    expect(plan.generated['test/database.integration-spec.ts']).toContain("GET /api/health/ready");
+    expect(plan.generated['test/setup-integration-env.ts']).toContain('RUN_DATABASE_INTEGRATION');
+    expect(plan.generated['vitest.config.integration.ts']).toContain('test/**/*.integration-spec.ts');
+    expect(JSON.parse(plan.generated['package.json']).scripts['test:integration']).toContain('vitest.config.integration.ts');
     expect(plan.generated['.env.example']).toContain('DB_HOST="localhost"');
     expect(plan.generated['.env.example']).toContain('# Database type: postgres, mysql, or mongodb.');
     expect(Object.keys(plan.manifest.presets)).toEqual(expect.arrayContaining(['database', 'migrations', 'rate-limit']));
@@ -179,6 +208,7 @@ describe('init foundation', () => {
     expect(plan.generated['.env.example']).not.toContain('OTEL_');
     expect(plan.generated['package.json']).not.toMatch(/passport|@nestjs\/jwt/);
     expect(plan.generated['src/auth/auth.module.ts']).toBeUndefined();
+    expect(plan.generated['agents/ARCHITECTURE.md']).toContain('illustrative CQRS scaffold');
   });
 
   it('selects MySQL or MongoDB drivers and only generates relational migration scripts', () => {
@@ -533,16 +563,24 @@ describe('init foundation', () => {
     expect(readFileSync(join(root, path), 'utf8')).toBe('user content');
   });
 
-  it('does not require managed guidance when adding to a legacy manifest', async () => {
+  it('does not rewrite managed guidance or project-owned text for a v5/v3 project', async () => {
     const root = project();
     await initialize({ root, packageVersion: '0.1.0', dryRun: false, resume: false, skipInstall: true, runFeature: () => undefined });
     const manifestPath = join(root, '.nest-cqrs.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    manifest.foundation.version = 3;
+    manifest.foundation.version = 5;
+    for (const preset of Object.values(manifest.presets ?? {}) as Array<{ version: number }>) preset.version = 3;
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-    // Simulate a project initialized before guidance files existed.
-    const result = await addPresets({ root, names: ['rate-limit'], dryRun: true, skipInstall: true });
+    const architecturePath = join(root, 'agents/ARCHITECTURE.md');
+    const customized = `${readFileSync(architecturePath, 'utf8')}\nUSER-OWNED LEGACY NOTE\n`;
+    writeFileSync(architecturePath, customized);
+
+    const result = await addPresets({ root, names: ['rate-limit'], dryRun: false, skipInstall: true });
     expect(result.operations).not.toContain('UPDATE agents/ARCHITECTURE.md');
     expect(result.operations).not.toContain('UPDATE agents/CODEBASE_MAP.md');
+    expect(readFileSync(architecturePath, 'utf8')).toBe(customized);
+    const updatedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    expect(updatedManifest.foundation.version).toBe(5);
+    expect(updatedManifest.presets['rate-limit'].version).toBe(4);
   });
 });

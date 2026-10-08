@@ -1,6 +1,6 @@
 import { strings } from '@angular-devkit/core';
 
-export const GUIDANCE_FOUNDATION_VERSION = 5;
+export const GUIDANCE_FOUNDATION_VERSION = 6;
 
 export const managedBlocks = {
   'AGENTS.md': 'commands',
@@ -34,6 +34,7 @@ function commandBlock(packageManager, packageJson) {
     ['Watch tests', 'test:watch'],
     ['Coverage', 'test:cov'],
     ['E2E tests', 'test:e2e'],
+    ['Database integration tests', 'test:integration'],
     ['Create migration', 'migration:create'],
     ['Generate migration', 'migration:generate'],
     ['Show migrations', 'migration:show'],
@@ -61,7 +62,8 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
       `- The generated initial \`DB_TYPE\` is \`${databaseType}\`.`,
       '- Validated runtime database types are `postgres`, `mysql`, and `mongodb`.',
       '- Database host, port, credentials, name, and TLS/SSL behavior come from the validated configuration layer.',
-      '- The health endpoint includes a TypeORM database check.',
+      '- The readiness endpoint includes a TypeORM database check; liveness remains independent of the database.',
+      '- Fast E2E tests use test-mode manual initialization; real database checks run separately through `test:integration` with explicit connection variables.',
       '',
     );
   }
@@ -80,7 +82,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
     integrations.push(
       '### Rate limiting',
       '',
-      '- `ThrottlerModule` is registered globally with a 60,000 ms TTL and a limit of 100 requests for the generated throttler definition.',
+      '- `ThrottlerModule` is registered with a 60,000 ms TTL and a limit of 100 requests, and `ThrottlerGuard` is enforced globally through `APP_GUARD`.',
       '',
     );
   }
@@ -106,7 +108,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
     '### Configuration and validation',
     '',
     '- Environment files are selected from `NODE_ENV` using `.env.<environment>` followed by `.env`.',
-    '- Supported environments are `development`, `staging`, and `production`.',
+    '- Supported environments are `development`, `staging`, `production`, and the test-only `test` environment.',
     '- Environment input is validated with Joi before typed configuration is used.',
     '- Application code consumes configuration through `ConfigService<EnvConfig>`.',
     '',
@@ -118,7 +120,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
     '',
     '### Health checks',
     '',
-    '- Terminus exposes the generated health endpoint through `HealthModule`.',
+    '- Terminus exposes `/health/live` for process liveness and `/health/ready` for required-integration readiness through `HealthModule`.',
     '',
     '### Swagger installation and exposure',
     '',
@@ -135,6 +137,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
     ...(dummyFeature
       ? [
           `- \`src/features/${strings.dasherize(dummyFeature)}/\` is the generated CQRS starter feature.`,
+          '- It is an illustrative CQRS scaffold whose placeholder handlers are not production functionality.',
           '- It contains the generated module, controller, DTOs, entity, commands, queries, handlers, and enabled handler tests.',
         ]
       : ['No dummy CQRS feature was requested during initialization.']),
@@ -162,7 +165,7 @@ function codebaseMapBlock({ selectedPresets, dummyFeature }) {
     '- `src/common/interceptors/` — successful response normalization.',
     '- `src/common/interfaces/` — shared API response models.',
     '- `src/common/pagination/` — pagination DTOs and result types.',
-    `- \`src/health/\` — Terminus health module and controller${selected.has('database') ? ' with database health checking' : ', plus the foundation unit test'}.`,
+    `- \`src/health/\` — separate Terminus liveness and readiness endpoints${selected.has('database') ? ', with the database checked only by readiness' : ', plus the foundation unit test'}.`,
     '',
   ];
   if (selected.has('migrations')) {
@@ -171,6 +174,16 @@ function codebaseMapBlock({ selectedPresets, dummyFeature }) {
       '',
       '- `src/database/data-source.ts` — TypeORM CLI data source.',
       '- `src/database/migrations/` — generated migration location.',
+      '',
+    );
+  }
+  if (selected.has('database')) {
+    lines.push(
+      '## Database integration tests',
+      '',
+      '- `test/database.integration-spec.ts` — explicit real-database readiness test.',
+      '- `test/setup-integration-env.ts` — requires opt-in and explicit database connection variables.',
+      '- `vitest.config.integration.ts` — isolated database integration-test configuration.',
       '',
     );
   }

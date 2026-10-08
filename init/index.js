@@ -62,8 +62,10 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
     moduleResolution: 'nodenext',
     target: 'ES2023',
     strict: true,
+    ignoreDeprecations: '6.0',
     types: ['vitest/globals', 'node'],
   });
+  delete tsconfig.compilerOptions.baseUrl;
   generated['tsconfig.json'] = `${JSON.stringify(tsconfig, null, 2)}\n`;
 
   const gitignorePath = resolve(root, '.gitignore');
@@ -308,7 +310,9 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     'src/main.ts', 'src/app.module.ts', 'src/config/env.config.types.ts',
     'src/config/configuration.ts', 'src/config/env.validation.ts', 'src/config/env.d.ts',
     'src/health/health.controller.ts', 'src/health/health.module.ts', 'src/health/health.controller.spec.ts',
-    'src/database/data-source.ts', 'src/database/migrations/.gitkeep', '.env.example',
+    'src/database/data-source.ts', 'src/database/migrations/.gitkeep', 'test/app.e2e-spec.ts',
+    'test/rate-limit.e2e-spec.ts',
+    'test/database.integration-spec.ts', 'test/setup-integration-env.ts', 'vitest.config.integration.ts', '.env.example',
   ];
   const generated = Object.fromEntries(controlledPaths.filter((path) => existsSync(resolve(root, path))).map((path) => [path, readFileSync(resolve(root, path), 'utf8')]));
   const originalPaths = new Set(Object.keys(generated));

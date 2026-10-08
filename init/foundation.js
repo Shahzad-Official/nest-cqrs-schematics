@@ -133,46 +133,82 @@ export const RESPONSE_MESSAGE_KEY = 'responseMessage';
 export const ResponseMessage = (message: string): MethodDecorator =>
   SetMetadata(RESPONSE_MESSAGE_KEY, message);
 `,
+  'src/common/decorators/api-response.decorator.ts': `import { applyDecorators, Type } from '@nestjs/common';
+import { ApiExtraModels, ApiResponse, getSchemaPath, ReferenceObject, SchemaObject } from '@nestjs/swagger';
+import { ApiErrorResponse, ApiSuccessResponse } from '../interfaces/api-response.interface.js';
+
+type ResponseSchema = SchemaObject | ReferenceObject;
+
+interface SuccessResponseOptions {
+  status: number;
+  description: string;
+  data: ResponseSchema;
+  models?: Type<unknown>[];
+}
+
+export function ApiSuccessEnvelope(options: SuccessResponseOptions): MethodDecorator {
+  return applyDecorators(
+    ApiExtraModels(ApiSuccessResponse, ...(options.models ?? [])),
+    ApiResponse({
+      status: options.status,
+      description: options.description,
+      schema: {
+        allOf: [
+          { $ref: getSchemaPath(ApiSuccessResponse) },
+          { properties: { data: options.data } },
+        ],
+      },
+    }),
+  );
+}
+
+export function ApiErrorEnvelope(status: number, description: string): MethodDecorator {
+  return applyDecorators(
+    ApiExtraModels(ApiErrorResponse),
+    ApiResponse({ status, description, schema: { $ref: getSchemaPath(ApiErrorResponse) } }),
+  );
+}
+`,
   'src/common/interfaces/api-response.interface.ts': `import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ApiSuccessResponse<T> {
   @ApiProperty({ example: true })
-  success: true;
+  success!: true;
 
   @ApiProperty({ example: 200 })
-  statusCode: number;
+  statusCode!: number;
 
   @ApiProperty({ example: '2026-01-01T00:00:00.000Z' })
-  timestamp: string;
+  timestamp!: string;
 
   @ApiProperty({ example: '/api/resources' })
-  path: string;
+  path!: string;
 
   @ApiPropertyOptional({ example: 'Request completed successfully' })
   message?: string;
 
   @ApiProperty({ description: 'Endpoint response payload' })
-  data: T;
+  data!: T;
 }
 
 export class ApiErrorResponse {
   @ApiProperty({ example: false })
-  success: false;
+  success!: false;
 
   @ApiProperty({ example: 400 })
-  statusCode: number;
+  statusCode!: number;
 
   @ApiProperty({ example: '2026-01-01T00:00:00.000Z' })
-  timestamp: string;
+  timestamp!: string;
 
   @ApiProperty({ example: '/api/resources' })
-  path: string;
+  path!: string;
 
   @ApiProperty({ example: 'Bad Request' })
-  error: string;
+  error!: string;
 
   @ApiProperty({ example: 'Validation failed' })
-  message: string;
+  message!: string;
 }
 `,
   'src/common/filters/global-exception.filter.ts': `import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Injectable } from '@nestjs/common';
@@ -296,12 +332,12 @@ export interface PaginatedResult<T> {
   meta: PaginationMeta;
 }
 `,
-  'src/config/env-file-path.ts': `const nodeEnvironments = ['development', 'staging', 'production'] as const;
+  'src/config/env-file-path.ts': `const nodeEnvironments = ['development', 'staging', 'production', 'test'] as const;
 
 export function envFilePath(): string[] {
   const nodeEnv = process.env.NODE_ENV ?? 'development';
   if (!nodeEnvironments.includes(nodeEnv as (typeof nodeEnvironments)[number])) {
-    throw new Error('NODE_ENV must be development, staging, or production');
+    throw new Error('NODE_ENV must be development, staging, production, or test');
   }
   return [\`.env.\${nodeEnv}\`, '.env'];
 }
@@ -311,7 +347,7 @@ export function envFilePath(): string[] {
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
-      NODE_ENV: 'development' | 'staging' | 'production';
+      NODE_ENV: 'development' | 'staging' | 'production' | 'test';
       PORT: number;
       API_PREFIX: string;
       SWAGGER_ENABLED: 'true' | 'false';
@@ -323,7 +359,7 @@ declare global {
 }
 `,
   'src/config/env.config.types.ts': `export type EnvConfig = {
-  env: 'development' | 'staging' | 'production';
+  env: 'development' | 'staging' | 'production' | 'test';
   port: number;
   apiPrefix: string;
   swaggerEnabled: boolean;
@@ -350,7 +386,7 @@ export function configuration(): EnvConfig {
   'src/config/env.validation.ts': `import Joi from 'joi';
 
 export const envValidationSchema = Joi.object({
-  NODE_ENV: Joi.string().valid('development', 'staging', 'production').required(),
+  NODE_ENV: Joi.string().valid('development', 'staging', 'production', 'test').required(),
   PORT: Joi.number().required(),
   API_PREFIX: Joi.string().required(),
   SWAGGER_ENABLED: Joi.boolean().truthy('true').falsy('false').required(),
@@ -358,25 +394,33 @@ export const envValidationSchema = Joi.object({
   CORS_ENABLED: Joi.boolean().truthy('true').falsy('false').required(),
   CORS_ORIGINS: Joi.when('CORS_ENABLED', {
     is: true,
+    // oxlint-disable-next-line unicorn/no-thenable -- Joi uses "then" as a conditional schema key.
     then: Joi.string().min(1).required(),
     otherwise: Joi.string().allow('').required(),
   }),
 });
 `,
   'src/health/health.controller.ts': `import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckResult, HealthCheckService } from '@nestjs/terminus';
+import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../common/decorators/api-response.decorator.js';
 
-@ApiTags('health')
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthCheckService) {}
 
-  @Get()
+  @Get('live')
+  @ApiSuccessEnvelope({ status: 200, description: 'Application is alive', data: { type: 'object' } })
+  @ApiErrorEnvelope(500, 'Unexpected health-check failure')
   @HealthCheck()
-  @ApiOperation({ summary: 'Check application health' })
-  @ApiOkResponse({ description: 'Application is healthy' })
-  check(): Promise<HealthCheckResult> {
+  live(): Promise<HealthCheckResult> {
+    return this.health.check([]);
+  }
+
+  @Get('ready')
+  @ApiSuccessEnvelope({ status: 200, description: 'Application is ready', data: { type: 'object' } })
+  @ApiErrorEnvelope(500, 'Unexpected readiness failure')
+  @HealthCheck()
+  ready(): Promise<HealthCheckResult> {
     return this.health.check([]);
   }
 }
@@ -392,11 +436,19 @@ export class HealthModule {}
 import { HealthController } from './health.controller.js';
 
 describe('HealthController', () => {
-  it('delegates the liveness check to Terminus', async () => {
+  it('keeps liveness independent from external integrations', async () => {
     const result = { status: 'ok', info: {}, error: {}, details: {} } as const;
     const check = vi.fn().mockResolvedValue(result);
     const health = { check } as unknown as HealthCheckService;
-    await expect(new HealthController(health).check()).resolves.toEqual(result);
+    await expect(new HealthController(health).live()).resolves.toEqual(result);
+    expect(check).toHaveBeenCalledWith([]);
+  });
+
+  it('checks foundation readiness', async () => {
+    const result = { status: 'ok', info: {}, error: {}, details: {} } as const;
+    const check = vi.fn().mockResolvedValue(result);
+    const health = { check } as unknown as HealthCheckService;
+    await expect(new HealthController(health).ready()).resolves.toEqual(result);
     expect(check).toHaveBeenCalledWith([]);
   });
 });
@@ -427,19 +479,40 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
-  test: { globals: true, root: './', include: ['test/**/*.e2e-spec.ts'] },
+  test: {
+    globals: true,
+    root: './',
+    include: ['test/**/*.e2e-spec.ts'],
+    setupFiles: ['./test/setup-env.ts'],
+  },
+});
+`,
+  'test/setup-env.ts': `Object.assign(process.env, {
+  NODE_ENV: 'test',
+  PORT: '3000',
+  API_PREFIX: 'api',
+  SWAGGER_ENABLED: 'true',
+  LOG_LEVEL: 'error',
+  CORS_ENABLED: 'false',
+  CORS_ORIGINS: '',
+  DB_TYPE: 'postgres',
+  DB_HOST: '127.0.0.1',
+  DB_PORT: '5432',
+  DB_USERNAME: 'test',
+  DB_PASSWORD: 'test',
+  DB_NAME: 'test',
+  DB_SSL: 'false',
 });
 `,
   'test/app.e2e-spec.ts': `import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 
 describe('health (e2e)', () => {
   let app: NestFastifyApplication;
   beforeAll(async () => {
-    process.env.NODE_ENV = 'development';
-    process.env.CORS_ENABLED = 'false';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication(new FastifyAdapter());
     app.setGlobalPrefix('api');
@@ -447,7 +520,31 @@ describe('health (e2e)', () => {
     await app.getHttpAdapter().getInstance().ready();
   });
   afterAll(() => app.close());
-  it('GET /api/health', () => request(app.getHttpServer()).get('/api/health').expect(200));
+  it('GET /api/health/live', () => request(app.getHttpServer()).get('/api/health/live').expect(200));
+  it('GET /api/health/ready', () => request(app.getHttpServer()).get('/api/health/ready').expect(200));
+  it('documents the intercepted success envelope', () => {
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+    const response = document.paths['/api/health/live']?.get?.responses?.['200'];
+    expect(response).toMatchObject({
+      content: {
+        'application/json': {
+          schema: {
+            allOf: [
+              { $ref: '#/components/schemas/ApiSuccessResponse' },
+              { properties: { data: { type: 'object' } } },
+            ],
+          },
+        },
+      },
+    });
+    expect(document.paths['/api/health/live']?.get?.responses?.['500']).toMatchObject({
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/ApiErrorResponse' },
+        },
+      },
+    });
+  });
 });
 `,
 };

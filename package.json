@@ -14,7 +14,8 @@
     "collection.json"
   ],
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:acceptance": "vitest run --config ./vitest.config.acceptance.ts"
   },
   "dependencies": {
     "@angular-devkit/core": "22.2.0",
