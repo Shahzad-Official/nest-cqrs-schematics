@@ -1,0 +1,7 @@
+import { Query } from '@nestjs/cqrs';
+
+export class Get<%= classify(name) %>Query extends Query<string> {
+  constructor(public readonly id: string) {
+    super();
+  }
+}

@@ -1,0 +1,9 @@
+import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
+import { Get<%= classify(name) %>Query } from './get-<%= dasherize(name) %>.query.js';
+
+@QueryHandler(Get<%= classify(name) %>Query)
+export class Get<%= classify(name) %>Handler implements IQueryHandler<Get<%= classify(name) %>Query> {
+  async execute(query: Get<%= classify(name) %>Query): Promise<string> {
+    return `This action returns a #${query.id} <%= dasherize(name) %>`;
+  }
+}

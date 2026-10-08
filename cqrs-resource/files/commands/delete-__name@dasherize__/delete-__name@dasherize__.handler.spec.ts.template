@@ -1,0 +1,11 @@
+import { Delete<%= classify(name) %>Command } from './delete-<%= dasherize(name) %>.command.js';
+import { Delete<%= classify(name) %>Handler } from './delete-<%= dasherize(name) %>.handler.js';
+
+describe('Delete<%= classify(name) %>Handler', () => {
+  it('returns the scaffold response', async () => {
+    const handler = new Delete<%= classify(name) %>Handler();
+    const result = await handler.execute(new Delete<%= classify(name) %>Command('id'));
+
+    expect(result).toBe('This action removes a #id <%= dasherize(name) %>');
+  });
+});

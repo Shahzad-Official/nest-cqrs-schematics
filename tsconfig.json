@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2023",
+    "strict": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["**/*.ts"]
+}

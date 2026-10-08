@@ -1,0 +1,11 @@
+import { Command } from '@nestjs/cqrs';
+import { Update<%= classify(name) %>Dto } from '../../dtos/update-<%= dasherize(name) %>.dto.js';
+
+export class Update<%= classify(name) %>Command extends Command<string> {
+  constructor(
+    public readonly id: string,
+    public readonly update<%= classify(name) %>Dto: Update<%= classify(name) %>Dto,
+  ) {
+    super();
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/@angular-devkit/schematics/collection-schema.json",
+  "schematics": {
+    "cqrs-resource": {
+      "description": "Generate a feature-first CQRS CRUD resource.",
+      "factory": "./cqrs-resource/index.js#default",
+      "schema": "./cqrs-resource/schema.json",
+      "aliases": ["cqrs-crud"]
+    }
+  }
+}

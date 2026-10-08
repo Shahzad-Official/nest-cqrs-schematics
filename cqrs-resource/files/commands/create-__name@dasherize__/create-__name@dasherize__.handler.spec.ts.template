@@ -1,0 +1,13 @@
+import { Create<%= classify(name) %>Command } from './create-<%= dasherize(name) %>.command.js';
+import { Create<%= classify(name) %>Handler } from './create-<%= dasherize(name) %>.handler.js';
+
+describe('Create<%= classify(name) %>Handler', () => {
+  it('returns the scaffold response', async () => {
+    const handler = new Create<%= classify(name) %>Handler();
+    const result = await handler.execute(
+      new Create<%= classify(name) %>Command({ name: 'Example' }),
+    );
+
+    expect(result).toBe('This action adds a new <%= dasherize(name) %>');
+  });
+});

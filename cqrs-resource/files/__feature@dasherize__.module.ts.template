@@ -1,0 +1,25 @@
+import { Module } from '@nestjs/common';
+<% if (crud) { %>
+import { Create<%= classify(name) %>Handler } from './commands/create-<%= dasherize(name) %>/create-<%= dasherize(name) %>.handler.js';
+import { Delete<%= classify(name) %>Handler } from './commands/delete-<%= dasherize(name) %>/delete-<%= dasherize(name) %>.handler.js';
+import { Update<%= classify(name) %>Handler } from './commands/update-<%= dasherize(name) %>/update-<%= dasherize(name) %>.handler.js';
+import { <%= classify(feature) %>Controller } from './controllers/<%= dasherize(feature) %>.controller.js';
+import { Get<%= classify(name) %>Handler } from './queries/get-<%= dasherize(name) %>/get-<%= dasherize(name) %>.handler.js';
+import { List<%= classify(feature) %>Handler } from './queries/list-<%= dasherize(feature) %>/list-<%= dasherize(feature) %>.handler.js';
+
+const handlers = [
+  Create<%= classify(name) %>Handler,
+  Update<%= classify(name) %>Handler,
+  Delete<%= classify(name) %>Handler,
+  Get<%= classify(name) %>Handler,
+  List<%= classify(feature) %>Handler,
+];
+<% } %>
+
+@Module({
+<% if (crud) { %>
+  controllers: [<%= classify(feature) %>Controller],
+  providers: handlers,
+<% } %>
+})
+export class <%= classify(feature) %>Module {}

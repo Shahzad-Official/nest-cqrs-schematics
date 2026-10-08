@@ -1,0 +1,28 @@
+{
+  "name": "@retail-pos/schematics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "schematics": "./collection.json",
+  "bin": {
+    "nest-cqrs": "./bin/nest-cqrs.js"
+  },
+  "files": [
+    "bin",
+    "cqrs-resource",
+    "init",
+    "collection.json"
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@angular-devkit/core": "22.2.0",
+    "@angular-devkit/schematics": "22.2.0",
+    "@nestjs/schematics": "12.0.6"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}

@@ -1,0 +1,11 @@
+import { Get<%= classify(name) %>Handler } from './get-<%= dasherize(name) %>.handler.js';
+import { Get<%= classify(name) %>Query } from './get-<%= dasherize(name) %>.query.js';
+
+describe('Get<%= classify(name) %>Handler', () => {
+  it('returns the scaffold response', async () => {
+    const handler = new Get<%= classify(name) %>Handler();
+    const result = await handler.execute(new Get<%= classify(name) %>Query('id'));
+
+    expect(result).toBe('This action returns a #id <%= dasherize(name) %>');
+  });
+});

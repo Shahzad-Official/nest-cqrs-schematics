@@ -1,0 +1,11 @@
+import { List<%= classify(feature) %>Handler } from './list-<%= dasherize(feature) %>.handler.js';
+
+describe('List<%= classify(feature) %>Handler', () => {
+  it('returns the scaffold response', async () => {
+    const handler = new List<%= classify(feature) %>Handler();
+
+    await expect(handler.execute()).resolves.toBe(
+      'This action returns all <%= dasherize(feature) %>',
+    );
+  });
+});

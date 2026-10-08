@@ -1,0 +1,13 @@
+import { Update<%= classify(name) %>Command } from './update-<%= dasherize(name) %>.command.js';
+import { Update<%= classify(name) %>Handler } from './update-<%= dasherize(name) %>.handler.js';
+
+describe('Update<%= classify(name) %>Handler', () => {
+  it('returns the scaffold response', async () => {
+    const handler = new Update<%= classify(name) %>Handler();
+    const result = await handler.execute(
+      new Update<%= classify(name) %>Command('id', { name: 'Updated' }),
+    );
+
+    expect(result).toBe('This action updates a #id <%= dasherize(name) %>');
+  });
+});

@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "CqrsResourceSchema",
+  "title": "CQRS CRUD resource options",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Feature name, for example products or stock-items.",
+      "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$",
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "What name would you like to use for the CQRS resource?"
+    },
+    "crud": {
+      "type": "boolean",
+      "description": "Generate CRUD endpoints.",
+      "default": true
+    },
+    "spec": {
+      "type": "boolean",
+      "description": "Generate handler unit tests.",
+      "default": true
+    }
+  },
+  "required": ["name"]
+}

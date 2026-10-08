@@ -1,0 +1,12 @@
+import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
+import { Update<%= classify(name) %>Command } from './update-<%= dasherize(name) %>.command.js';
+
+@CommandHandler(Update<%= classify(name) %>Command)
+export class Update<%= classify(name) %>Handler
+  implements ICommandHandler<Update<%= classify(name) %>Command>
+{
+  async execute(command: Update<%= classify(name) %>Command): Promise<string> {
+    void command.update<%= classify(name) %>Dto;
+    return `This action updates a #${command.id} <%= dasherize(name) %>`;
+  }
+}
