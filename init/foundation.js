@@ -1,4 +1,6 @@
-export const FOUNDATION_VERSION = 3;
+import { GUIDANCE_FOUNDATION_VERSION } from './guidance.js';
+
+export const FOUNDATION_VERSION = GUIDANCE_FOUNDATION_VERSION;
 
 export const runtimeDependencies = {
   '@fastify/cors': '^11.0.0',

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { devDependencies, files, FOUNDATION_VERSION, removableDefaultFiles, runtimeDependencies } from './foundation.js';
+import { GUIDANCE_FOUNDATION_VERSION, managedBlocks, renderGuidanceFiles, replaceManagedBlock } from './guidance.js';
 import { applyPresets, PRESET_VERSION, presetNames } from './presets.js';
 
 const manifestPath = '.nest-cqrs.json';
@@ -42,6 +43,13 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
     databaseType: databaseOptions.type,
     migrations: databaseOptions.migrations,
   });
+  Object.assign(generated, renderGuidanceFiles({
+    packageManager: detectPackageManager(root),
+    packageJson,
+    selectedPresets: appliedPresets,
+    databaseType: databaseOptions.type,
+    dummyFeature,
+  }));
   generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
   const nestCli = JSON.parse(readFileSync(resolve(root, 'nest-cli.json'), 'utf8'));
   nestCli.collection = '@nestjs/schematics';
@@ -70,7 +78,12 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
   const manifest = {
     manifestVersion: 1,
     generator: { name: '@retail-pos/schematics', version: packageVersion },
-    foundation: { version: FOUNDATION_VERSION, status: 'complete', appliedAt: new Date().toISOString() },
+    foundation: {
+      version: FOUNDATION_VERSION,
+      status: 'complete',
+      appliedAt: new Date().toISOString(),
+      ...(dummyFeature ? { starterFeature: dummyFeature } : {}),
+    },
     presets: Object.fromEntries(appliedPresets.map((name) => [name, {
       version: PRESET_VERSION,
       status: 'complete',
@@ -296,6 +309,31 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     migrations: effectiveDatabaseOptions.migrations,
   });
   generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
+  if (manifest.foundation?.version >= GUIDANCE_FOUNDATION_VERSION) {
+    const selectedPresets = [...new Set([
+      ...Object.entries(manifest.presets ?? {})
+        .filter(([, preset]) => preset?.status === 'complete')
+        .map(([name]) => name),
+      ...applied,
+    ])];
+    const desiredGuidance = renderGuidanceFiles({
+      packageManager: detectPackageManager(root),
+      packageJson,
+      selectedPresets,
+      databaseType: effectiveDatabaseOptions.type,
+      dummyFeature: manifest.foundation.starterFeature,
+    });
+    for (const [path, block] of Object.entries(managedBlocks)) {
+      const absolute = resolve(root, path);
+      if (!existsSync(absolute)) {
+        throw new Error(`Cannot update ${path}: managed guidance file is missing.`);
+      }
+      originalPaths.add(path);
+      const current = readFileSync(absolute, 'utf8');
+      const updated = replaceManagedBlock(current, desiredGuidance[path], block, path);
+      if (updated !== current) generated[path] = updated;
+    }
+  }
   for (const path of Object.keys(generated)) {
     if (!originalPaths.has(path) && existsSync(resolve(root, path))) throw new Error(`Refusing to overwrite existing file: ${path}`);
   }
