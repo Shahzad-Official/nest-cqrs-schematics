@@ -1,4 +1,4 @@
-export const FOUNDATION_VERSION = 1;
+export const FOUNDATION_VERSION = 2;
 
 export const runtimeDependencies = {
   '@fastify/cors': '^11.0.0',
@@ -7,6 +7,7 @@ export const runtimeDependencies = {
   '@nestjs/cqrs': '^12.0.0',
   '@nestjs/platform-fastify': '^12.0.0',
   '@nestjs/swagger': '^12.0.0',
+  '@nestjs/terminus': '^12.0.0',
   'class-transformer': '^0.5.1',
   'class-validator': '^0.15.0',
   fastify: '^5.0.0',
@@ -107,7 +108,7 @@ import { HealthModule } from './health/health.module.js';
         pinoHttp: {
           level: config.getOrThrow('logLevel', { infer: true }),
           transport:
-            config.getOrThrow('appEnv', { infer: true }) === 'development'
+            config.getOrThrow('env', { infer: true }) === 'development'
               ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
               : undefined,
           redact: ['req.headers.authorization', 'req.headers.cookie'],
@@ -276,37 +277,44 @@ export function envFilePath(): string[] {
   return [\`.env.\${appEnv}\`, '.env'];
 }
 `,
-  'src/config/env.config.types.ts': `export type AppEnvironment = 'development' | 'staging' | 'production';
-export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  'src/config/env.d.ts': `export {};
 
-export interface EnvConfig {
-  nodeEnv: 'development' | 'production' | 'test';
-  appEnv: AppEnvironment;
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      APP_ENV?: 'development' | 'staging' | 'production';
+      NODE_ENV: 'development' | 'staging' | 'production';
+      PORT: number;
+      API_PREFIX: string;
+      SWAGGER_ENABLED: 'true' | 'false';
+      LOG_LEVEL: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+      CORS_ENABLED: 'true' | 'false';
+      CORS_ORIGINS: string;
+    }
+  }
+}
+`,
+  'src/config/env.config.types.ts': `export type EnvConfig = {
+  env: 'development' | 'staging' | 'production';
   port: number;
   apiPrefix: string;
   swaggerEnabled: boolean;
-  logLevel: LogLevel;
+  logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
   cors: { enabled: boolean; origins: string[] };
-}
+};
 `,
   'src/config/configuration.ts': `import { EnvConfig } from './env.config.types.js';
 
 export function configuration(): EnvConfig {
-  const corsEnabled = process.env.CORS_ENABLED === 'true';
-  const origins = (process.env.CORS_ORIGINS ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  if (corsEnabled && origins.length === 0) {
-    throw new Error('CORS_ORIGINS must contain at least one origin when CORS_ENABLED=true');
-  }
+  const parsed = process.env;
+  const corsEnabled = parsed.CORS_ENABLED === 'true';
+  const origins = parsed.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean);
   return {
-    nodeEnv: process.env.NODE_ENV as EnvConfig['nodeEnv'],
-    appEnv: process.env.APP_ENV as EnvConfig['appEnv'],
-    port: Number(process.env.PORT),
-    apiPrefix: process.env.API_PREFIX as string,
-    swaggerEnabled: process.env.SWAGGER_ENABLED === 'true',
-    logLevel: process.env.LOG_LEVEL as EnvConfig['logLevel'],
+    env: parsed.NODE_ENV,
+    port: parsed.PORT,
+    apiPrefix: parsed.API_PREFIX,
+    swaggerEnabled: parsed.SWAGGER_ENABLED === 'true',
+    logLevel: parsed.LOG_LEVEL,
     cors: { enabled: corsEnabled, origins },
   };
 }
@@ -314,75 +322,68 @@ export function configuration(): EnvConfig {
   'src/config/env.validation.ts': `import Joi from 'joi';
 
 export const envValidationSchema = Joi.object({
-  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   APP_ENV: Joi.string().valid('development', 'staging', 'production').default('development'),
-  PORT: Joi.number().port().default(3000),
-  API_PREFIX: Joi.string().default('api'),
-  SWAGGER_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
-  LOG_LEVEL: Joi.string().valid('fatal', 'error', 'warn', 'info', 'debug', 'trace').default('info'),
-  CORS_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
-  CORS_ORIGINS: Joi.string().allow('').default(''),
+  NODE_ENV: Joi.string().valid('development', 'staging', 'production').required(),
+  PORT: Joi.number().required(),
+  API_PREFIX: Joi.string().required(),
+  SWAGGER_ENABLED: Joi.boolean().truthy('true').falsy('false').required(),
+  LOG_LEVEL: Joi.string().valid('fatal', 'error', 'warn', 'info', 'debug', 'trace').required(),
+  CORS_ENABLED: Joi.boolean().truthy('true').falsy('false').required(),
+  CORS_ORIGINS: Joi.when('CORS_ENABLED', {
+    is: true,
+    then: Joi.string().min(1).required(),
+    otherwise: Joi.string().allow('').required(),
+  }),
 });
 `,
   'src/health/health.controller.ts': `import { Controller, Get } from '@nestjs/common';
+import { HealthCheck, HealthCheckResult, HealthCheckService } from '@nestjs/terminus';
 
 @Controller('health')
 export class HealthController {
+  constructor(private readonly health: HealthCheckService) {}
+
   @Get()
-  check(): { status: 'ok' } {
-    return { status: 'ok' };
+  @HealthCheck()
+  check(): Promise<HealthCheckResult> {
+    return this.health.check([]);
   }
 }
 `,
   'src/health/health.module.ts': `import { Module } from '@nestjs/common';
+import { TerminusModule } from '@nestjs/terminus';
 import { HealthController } from './health.controller.js';
 
-@Module({ controllers: [HealthController] })
+@Module({ imports: [TerminusModule], controllers: [HealthController] })
 export class HealthModule {}
 `,
-  'src/health/health.controller.spec.ts': `import { HealthController } from './health.controller.js';
+  'src/health/health.controller.spec.ts': `import { HealthCheckService } from '@nestjs/terminus';
+import { HealthController } from './health.controller.js';
 
 describe('HealthController', () => {
-  it('reports liveness', () => {
-    expect(new HealthController().check()).toEqual({ status: 'ok' });
+  it('delegates the liveness check to Terminus', async () => {
+    const result = { status: 'ok', info: {}, error: {}, details: {} } as const;
+    const check = vi.fn().mockResolvedValue(result);
+    const health = { check } as unknown as HealthCheckService;
+    await expect(new HealthController(health).check()).resolves.toEqual(result);
+    expect(check).toHaveBeenCalledWith([]);
   });
 });
 `,
-  '.env.example': `NODE_ENV=development
+  '.env.example': `# Runtime environment: development, staging, or production
+NODE_ENV=development
+# Deployment environment used to select application behavior
 APP_ENV=development
+# HTTP server
 PORT=3000
 API_PREFIX=api
+# API documentation is served at /docs when enabled
 SWAGGER_ENABLED=true
+# Pino level: fatal, error, warn, info, debug, or trace
 LOG_LEVEL=debug
+# Comma-separated browser origins; at least one is required when enabled
 CORS_ENABLED=true
 CORS_ORIGINS=http://localhost:3000
-`,
-  '.env.development.example': `NODE_ENV=development
-APP_ENV=development
-PORT=3000
-API_PREFIX=api
-SWAGGER_ENABLED=true
-LOG_LEVEL=debug
-CORS_ENABLED=true
-CORS_ORIGINS=http://localhost:3000
-`,
-  '.env.staging.example': `NODE_ENV=production
-APP_ENV=staging
-PORT=3000
-API_PREFIX=api
-SWAGGER_ENABLED=false
-LOG_LEVEL=info
-CORS_ENABLED=true
-CORS_ORIGINS=https://staging.example.com
-`,
-  '.env.production.example': `NODE_ENV=production
-APP_ENV=production
-PORT=3000
-API_PREFIX=api
-SWAGGER_ENABLED=false
-LOG_LEVEL=info
-CORS_ENABLED=true
-CORS_ORIGINS=https://example.com
 `,
   'vitest.config.ts': `import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';

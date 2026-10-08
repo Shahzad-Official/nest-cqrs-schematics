@@ -3,12 +3,13 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { devDependencies, files, FOUNDATION_VERSION, removableDefaultFiles, runtimeDependencies } from './foundation.js';
+import { applyPresets, PRESET_VERSION, presetNames } from './presets.js';
 
 const manifestPath = '.nest-cqrs.json';
 const pendingPath = '.nest-cqrs.pending.json';
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 
-export function buildPlan(root, packageVersion, dummyFeature) {
+export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = [], databaseOptions = {}) {
   const packagePath = resolve(root, 'package.json');
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
   packageJson.type = 'module';
@@ -31,7 +32,17 @@ export function buildPlan(root, packageVersion, dummyFeature) {
   packageJson.devDependencies = { ...packageJson.devDependencies, ...devDependencies };
   packageJson.devDependencies.typescript ??= '^6.0.0';
 
-  const generated = { ...files, 'package.json': `${JSON.stringify(packageJson, null, 2)}\n` };
+  const generated = { ...files };
+  const normalizedPresets = new Set(selectedPresets);
+  if (normalizedPresets.has('database') && databaseOptions.migrations) normalizedPresets.add('migrations');
+  const appliedPresets = applyPresets({
+    files: generated,
+    packageJson,
+    selected: [...normalizedPresets],
+    databaseType: databaseOptions.type,
+    migrations: databaseOptions.migrations,
+  });
+  generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
   const nestCli = JSON.parse(readFileSync(resolve(root, 'nest-cli.json'), 'utf8'));
   nestCli.collection = '@nestjs/schematics';
   generated['nest-cli.json'] = `${JSON.stringify(nestCli, null, 2)}\n`;
@@ -60,7 +71,11 @@ export function buildPlan(root, packageVersion, dummyFeature) {
     manifestVersion: 1,
     generator: { name: '@retail-pos/schematics', version: packageVersion },
     foundation: { version: FOUNDATION_VERSION, status: 'complete', appliedAt: new Date().toISOString() },
-    presets: {},
+    presets: Object.fromEntries(appliedPresets.map((name) => [name, {
+      version: PRESET_VERSION,
+      status: 'complete',
+      ...(name === 'database' ? { type: databaseOptions.type, migrations: Boolean(databaseOptions.migrations) || appliedPresets.includes('migrations') } : {}),
+    }])),
   };
   return { generated, manifest, dummyFeature };
 }
@@ -120,9 +135,78 @@ export function applyPlan(root, plan, dryRun) {
 export function installDependencies(root, packageManager) {
   const command = packageManager === 'npm' ? 'npm' : packageManager;
   const args = packageManager === 'npm' ? ['install'] : ['install'];
-  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', shell: false });
+  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', shell: false });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`Dependency installation failed with status ${result.status}.`);
+  if (result.status !== 0) {
+    const pnpmOutput = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    const error = new Error(
+      `Dependency installation failed with status ${result.status}.${pnpmOutput ? `\n${pnpmOutput}` : ''}`,
+    );
+    error.pnpmOutput = pnpmOutput;
+    error.code = pnpmOutput.includes('ERR_PNPM_IGNORED_BUILDS')
+      ? 'ERR_PNPM_IGNORED_BUILDS'
+      : undefined;
+    throw error;
+  }
+}
+
+export function approvePnpmBuilds(root, spawn = spawnSync) {
+  const result = spawn('pnpm', ['approve-builds', '--all'], {
+    cwd: root,
+    stdio: 'inherit',
+    shell: false,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`pnpm approve-builds --all failed with status ${result.status}.`);
+  }
+}
+
+function isIgnoredBuildsError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return error?.code === 'ERR_PNPM_IGNORED_BUILDS'
+    || error?.pnpmOutput?.includes('ERR_PNPM_IGNORED_BUILDS')
+    || message.includes('ERR_PNPM_IGNORED_BUILDS');
+}
+
+function readPnpmAllowBuilds(root) {
+  const workspacePath = resolve(root, 'pnpm-workspace.yaml');
+  if (!existsSync(workspacePath)) {
+    const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+    return packageJson.pnpm?.allowBuilds ?? null;
+  }
+
+  const lines = readFileSync(workspacePath, 'utf8').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^allowBuilds\s*:/.test(line));
+  if (start === -1) return null;
+  const headerValue = lines[start].replace(/^allowBuilds\s*:\s*/, '').trim();
+  if (headerValue && headerValue !== '{}') {
+    try { return JSON.parse(headerValue); } catch { return headerValue; }
+  }
+
+  const allowBuilds = {};
+  for (const line of lines.slice(start + 1)) {
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    if (!/^\s+/.test(line)) break;
+    const entry = line.match(/^\s+(['"]?)([^:'"]+)\1\s*:\s*(true|false)\s*(?:#.*)?$/);
+    if (entry) allowBuilds[entry[2].trim()] = entry[3] === 'true';
+  }
+  return allowBuilds;
+}
+
+function updatePnpmRecoveryCheckpoint(root, packageVersion, dummyFeature, selectedPresets, databaseOptions) {
+  const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  const plan = buildPlan(root, packageVersion, dummyFeature, selectedPresets, databaseOptions);
+  const checkpointPath = resolve(root, pendingPath);
+  const checkpoint = JSON.parse(readFileSync(checkpointPath, 'utf8'));
+  checkpoint.planHash = hash(JSON.stringify(plan.generated));
+  checkpoint.pnpm = {
+    allowBuilds: readPnpmAllowBuilds(root),
+    approvedAt: new Date().toISOString(),
+  };
+  writeFileSync(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`);
 }
 
 export function detectPackageManager(root) {
@@ -131,22 +215,109 @@ export function detectPackageManager(root) {
   return 'npm';
 }
 
-export async function initialize({ root, packageVersion, dryRun, resume, skipInstall, dummyFeature, runFeature, install = installDependencies }) {
+export async function initialize({ root, packageVersion, dryRun, resume, skipInstall, dummyFeature, selectedPresets = [], databaseOptions = {}, runFeature, install = installDependencies, approveBuilds = approvePnpmBuilds }) {
   preflight(root, resume);
-  const plan = buildPlan(root, packageVersion, dummyFeature);
+  if (resume) {
+    const pending = JSON.parse(readFileSync(resolve(root, pendingPath), 'utf8'));
+    selectedPresets = pending.selectedPresets ?? selectedPresets;
+    databaseOptions = pending.databaseOptions ?? databaseOptions;
+    dummyFeature = pending.dummyFeature ?? dummyFeature;
+  }
+  const plan = buildPlan(root, packageVersion, dummyFeature, selectedPresets, databaseOptions);
   const digest = hash(JSON.stringify(plan.generated));
   if (resume) {
     const pending = JSON.parse(readFileSync(resolve(root, pendingPath), 'utf8'));
     if (pending.planHash !== digest) throw new Error('Cannot resume because the project or generator plan has changed. Resolve the drift first.');
+    if (pending.pnpm && JSON.stringify(pending.pnpm.allowBuilds) !== JSON.stringify(readPnpmAllowBuilds(root))) {
+      throw new Error('Cannot resume because pnpm allowBuilds changed after approval. Resolve the configuration drift first.');
+    }
   }
   const operations = resume ? [] : applyPlan(root, plan, dryRun);
   if (dryRun) return { operations, complete: false };
 
-  if (!resume) writeFileSync(resolve(root, pendingPath), `${JSON.stringify({ manifestVersion: 1, foundationVersion: FOUNDATION_VERSION, planHash: digest }, null, 2)}\n`);
-  if (!skipInstall) install(root, detectPackageManager(root));
+  if (!resume) writeFileSync(resolve(root, pendingPath), `${JSON.stringify({
+    manifestVersion: 1,
+    foundationVersion: FOUNDATION_VERSION,
+    planHash: digest,
+    selectedPresets,
+    databaseOptions,
+    dummyFeature,
+  }, null, 2)}\n`);
+  if (!skipInstall) {
+    const packageManager = detectPackageManager(root);
+    try {
+      install(root, packageManager);
+    } catch (error) {
+      if (packageManager !== 'pnpm' || !isIgnoredBuildsError(error)) throw error;
+      console.log('Detected ERR_PNPM_IGNORED_BUILDS. Approving pending dependency builds with pnpm approve-builds --all.');
+      approveBuilds(root);
+      updatePnpmRecoveryCheckpoint(root, packageVersion, dummyFeature, selectedPresets, databaseOptions);
+      install(root, packageManager);
+    }
+  }
   if (dummyFeature) await runFeature(dummyFeature);
 
   writeFileSync(resolve(root, manifestPath), `${JSON.stringify(plan.manifest, null, 2)}\n`);
   rmSync(resolve(root, pendingPath));
+  return { operations, complete: true };
+}
+
+export async function addPresets({ root, names, dryRun, skipInstall, databaseOptions = {}, install = installDependencies }) {
+  for (const name of names) if (!presetNames.includes(name)) throw new Error(`Unknown preset: ${name}. Available: ${presetNames.join(', ')}`);
+  const manifestFile = resolve(root, manifestPath);
+  if (!existsSync(manifestFile)) throw new Error('Run nest-cqrs init before adding presets.');
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+  const already = names.filter((name) => manifest.presets?.[name]?.status === 'complete');
+  if (already.length) throw new Error(`Already installed: ${already.join(', ')}`);
+  const effectiveDatabaseOptions = {
+    ...databaseOptions,
+    type: databaseOptions.type ?? manifest.presets?.database?.type,
+    migrations: databaseOptions.migrations ?? names.includes('migrations'),
+  };
+  if (names.includes('migrations') && manifest.presets?.database?.migrations) {
+    throw new Error('Migrations are already configured for this database.');
+  }
+
+  const controlledPaths = [
+    'src/main.ts', 'src/app.module.ts', 'src/config/env.config.types.ts',
+    'src/config/configuration.ts', 'src/config/env.validation.ts', 'src/config/env.d.ts',
+    'src/health/health.controller.ts', 'src/health/health.module.ts', 'src/health/health.controller.spec.ts',
+    'src/database/data-source.ts', 'src/database/migrations/.gitkeep', '.env.example',
+  ];
+  const generated = Object.fromEntries(controlledPaths.filter((path) => existsSync(resolve(root, path))).map((path) => [path, readFileSync(resolve(root, path), 'utf8')]));
+  const originalPaths = new Set(Object.keys(generated));
+  originalPaths.add('package.json');
+  const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  const applied = applyPresets({
+    files: generated,
+    packageJson,
+    selected: names,
+    databaseType: effectiveDatabaseOptions.type,
+    migrations: effectiveDatabaseOptions.migrations,
+  });
+  generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
+  for (const path of Object.keys(generated)) {
+    if (!originalPaths.has(path) && existsSync(resolve(root, path))) throw new Error(`Refusing to overwrite existing file: ${path}`);
+  }
+  const operations = Object.entries(generated).map(([path, content]) => {
+    const absolute = resolve(root, path);
+    const existed = existsSync(absolute);
+    if (!dryRun) { mkdirSync(dirname(absolute), { recursive: true }); writeFileSync(absolute, content); }
+    return `${existed ? 'UPDATE' : 'CREATE'} ${path}`;
+  });
+  if (dryRun) return { operations, complete: false };
+  if (!skipInstall) install(root, detectPackageManager(root));
+  manifest.presets ??= {};
+  for (const name of applied) manifest.presets[name] = {
+    version: PRESET_VERSION,
+    status: 'complete',
+    appliedAt: new Date().toISOString(),
+    ...(name === 'database' ? { type: effectiveDatabaseOptions.type, migrations: Boolean(effectiveDatabaseOptions.migrations) || names.includes('migrations') } : {}),
+    ...(name === 'migrations' ? { databaseType: effectiveDatabaseOptions.type } : {}),
+  };
+  if (applied.includes('migrations') && manifest.presets.database) {
+    manifest.presets.database.migrations = true;
+  }
+  writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
   return { operations, complete: true };
 }
