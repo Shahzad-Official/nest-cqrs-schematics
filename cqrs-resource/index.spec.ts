@@ -108,6 +108,28 @@ describe('cqrs-resource schematic', () => {
     expect(appModule).toContain('imports: [StockItemsModule]');
   });
 
+  it('adds OpenAPI metadata when Swagger is installed in the app', async () => {
+    const runner = new SchematicTestRunner('cqrs-schematics', collectionPath);
+    const input = nestProjectTree();
+    input.overwrite(
+      '/package.json',
+      JSON.stringify({ type: 'module', dependencies: { '@nestjs/swagger': '^12.0.0' } }),
+    );
+    const tree = await runner.runSchematic(
+      'cqrs-resource',
+      { name: 'orders' },
+      input,
+    );
+
+    const controller = tree.readContent('/src/features/orders/controllers/orders.controller.ts');
+    const createDto = tree.readContent('/src/features/orders/dtos/create-order.dto.ts');
+    expect(controller).toContain("@ApiTags('orders')");
+    expect(controller).toContain("@ApiOperation({ summary: 'Create order' })");
+    expect(controller).toContain('@ApiCreatedResponse');
+    expect(createDto).toContain("import { ApiProperty } from '@nestjs/swagger'");
+    expect(createDto).toContain("@ApiProperty({ example: 'Example' })");
+  });
+
   it('registers a no-CRUD feature without duplicating an existing import', async () => {
     const runner = new SchematicTestRunner('cqrs-schematics', collectionPath);
     const existingModule = `import { Module } from '@nestjs/common';

@@ -1,4 +1,4 @@
-export const FOUNDATION_VERSION = 2;
+export const FOUNDATION_VERSION = 3;
 
 export const runtimeDependencies = {
   '@fastify/cors': '^11.0.0',
@@ -131,21 +131,45 @@ export const RESPONSE_MESSAGE_KEY = 'responseMessage';
 export const ResponseMessage = (message: string): MethodDecorator =>
   SetMetadata(RESPONSE_MESSAGE_KEY, message);
 `,
-  'src/common/interfaces/api-response.interface.ts': `export interface ApiSuccessResponse<T> {
+  'src/common/interfaces/api-response.interface.ts': `import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class ApiSuccessResponse<T> {
+  @ApiProperty({ example: true })
   success: true;
+
+  @ApiProperty({ example: 200 })
   statusCode: number;
+
+  @ApiProperty({ example: '2026-01-01T00:00:00.000Z' })
   timestamp: string;
+
+  @ApiProperty({ example: '/api/resources' })
   path: string;
+
+  @ApiPropertyOptional({ example: 'Request completed successfully' })
   message?: string;
+
+  @ApiProperty({ description: 'Endpoint response payload' })
   data: T;
 }
 
-export interface ApiErrorResponse {
+export class ApiErrorResponse {
+  @ApiProperty({ example: false })
   success: false;
+
+  @ApiProperty({ example: 400 })
   statusCode: number;
+
+  @ApiProperty({ example: '2026-01-01T00:00:00.000Z' })
   timestamp: string;
+
+  @ApiProperty({ example: '/api/resources' })
   path: string;
+
+  @ApiProperty({ example: 'Bad Request' })
   error: string;
+
+  @ApiProperty({ example: 'Validation failed' })
   message: string;
 }
 `,
@@ -235,16 +259,19 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, ApiSuccessResp
   }
 }
 `,
-  'src/common/pagination/pagination-query.dto.ts': `import { Type } from 'class-transformer';
+  'src/common/pagination/pagination-query.dto.ts': `import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class PaginationQueryDto {
+  @ApiPropertyOptional({ example: 1, minimum: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
+  @ApiPropertyOptional({ example: 20, minimum: 1, maximum: 100, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -267,14 +294,14 @@ export interface PaginatedResult<T> {
   meta: PaginationMeta;
 }
 `,
-  'src/config/env-file-path.ts': `const appEnvironments = ['development', 'staging', 'production'] as const;
+  'src/config/env-file-path.ts': `const nodeEnvironments = ['development', 'staging', 'production'] as const;
 
 export function envFilePath(): string[] {
-  const appEnv = process.env.APP_ENV ?? 'development';
-  if (!appEnvironments.includes(appEnv as (typeof appEnvironments)[number])) {
-    throw new Error('APP_ENV must be development, staging, or production');
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  if (!nodeEnvironments.includes(nodeEnv as (typeof nodeEnvironments)[number])) {
+    throw new Error('NODE_ENV must be development, staging, or production');
   }
-  return [\`.env.\${appEnv}\`, '.env'];
+  return [\`.env.\${nodeEnv}\`, '.env'];
 }
 `,
   'src/config/env.d.ts': `export {};
@@ -282,7 +309,6 @@ export function envFilePath(): string[] {
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
-      APP_ENV?: 'development' | 'staging' | 'production';
       NODE_ENV: 'development' | 'staging' | 'production';
       PORT: number;
       API_PREFIX: string;
@@ -322,7 +348,6 @@ export function configuration(): EnvConfig {
   'src/config/env.validation.ts': `import Joi from 'joi';
 
 export const envValidationSchema = Joi.object({
-  APP_ENV: Joi.string().valid('development', 'staging', 'production').default('development'),
   NODE_ENV: Joi.string().valid('development', 'staging', 'production').required(),
   PORT: Joi.number().required(),
   API_PREFIX: Joi.string().required(),
@@ -337,14 +362,18 @@ export const envValidationSchema = Joi.object({
 });
 `,
   'src/health/health.controller.ts': `import { Controller, Get } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckResult, HealthCheckService } from '@nestjs/terminus';
 
+@ApiTags('health')
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthCheckService) {}
 
   @Get()
   @HealthCheck()
+  @ApiOperation({ summary: 'Check application health' })
+  @ApiOkResponse({ description: 'Application is healthy' })
   check(): Promise<HealthCheckResult> {
     return this.health.check([]);
   }
@@ -370,20 +399,18 @@ describe('HealthController', () => {
   });
 });
 `,
-  '.env.example': `# Runtime environment: development, staging, or production
-NODE_ENV=development
-# Deployment environment used to select application behavior
-APP_ENV=development
+  '.env.example': `# Runtime and configuration-file environment: development, staging, or production
+NODE_ENV="development"
 # HTTP server
 PORT=3000
-API_PREFIX=api
+API_PREFIX="api"
 # API documentation is served at /docs when enabled
 SWAGGER_ENABLED=true
 # Pino level: fatal, error, warn, info, debug, or trace
-LOG_LEVEL=debug
+LOG_LEVEL="debug"
 # Comma-separated browser origins; at least one is required when enabled
 CORS_ENABLED=true
-CORS_ORIGINS=http://localhost:3000
+CORS_ORIGINS="http://localhost:3000"
 `,
   'vitest.config.ts': `import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -409,8 +436,7 @@ import { AppModule } from '../src/app.module.js';
 describe('health (e2e)', () => {
   let app: NestFastifyApplication;
   beforeAll(async () => {
-    process.env.NODE_ENV = 'test';
-    process.env.APP_ENV = 'development';
+    process.env.NODE_ENV = 'development';
     process.env.CORS_ENABLED = 'false';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication(new FastifyAdapter());

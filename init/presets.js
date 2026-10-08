@@ -1,6 +1,6 @@
 export const presetNames = ['database', 'migrations', 'rate-limit'];
 export const databaseTypes = ['postgres', 'mysql', 'mongodb'];
-export const PRESET_VERSION = 2;
+export const PRESET_VERSION = 3;
 
 const dependencies = {
   postgres: { pg: '^8.0.0', typeorm: '^1.1.1' },
@@ -35,13 +35,18 @@ export function applyPresets({ files, packageJson, selected, databaseType, migra
 }
 
 function applyDatabase(files, packageJson, databaseType) {
-  const driver = Object.fromEntries(Object.entries(dependencies[databaseType]).filter(([name]) => name !== 'typeorm'));
-  packageJson.dependencies = { ...packageJson.dependencies, '@nestjs/typeorm': '^12.0.0', typeorm: '^1.1.1', ...driver };
+  const drivers = Object.assign(
+    {},
+    ...Object.values(dependencies).map((items) =>
+      Object.fromEntries(Object.entries(items).filter(([name]) => name !== 'typeorm')),
+    ),
+  );
+  packageJson.dependencies = { ...packageJson.dependencies, '@nestjs/typeorm': '^12.0.0', typeorm: '^1.1.1', ...drivers };
 
-  const isMongo = databaseType === 'mongodb';
-  const typeormOptions = isMongo
-    ? `return { type: 'mongodb', host: db.host, port: db.port, username: db.username, password: db.password, database: db.database, tls: db.ssl, autoLoadEntities: true, synchronize: false };`
-    : `return { type: '${databaseType}', host: db.host, port: db.port, username: db.username, password: db.password, database: db.database, ssl: db.ssl ? { rejectUnauthorized: true } : false, autoLoadEntities: true, synchronize: false };`;
+  const typeormOptions = `const common = { host: db.host, port: db.port, username: db.username, password: db.password, database: db.database, autoLoadEntities: true, synchronize: false };
+        return db.type === 'mongodb'
+          ? { ...common, type: db.type, tls: db.ssl }
+          : { ...common, type: db.type, ssl: db.ssl ? { rejectUnauthorized: true } : false };`;
   let app = addImport(files['src/app.module.ts'], "import { TypeOrmModule } from '@nestjs/typeorm';");
   app = addModuleImport(app, `TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -54,12 +59,12 @@ function applyDatabase(files, packageJson, databaseType) {
   files['src/config/env.config.types.ts'] = files['src/config/env.config.types.ts'].replace(
     '  cors: { enabled: boolean; origins: string[] };',
     `  cors: { enabled: boolean; origins: string[] };
-  db: { type: '${databaseType}'; host: string; port: number; username: string; password: string; database: string; ssl: boolean };`,
+  db: { type: 'postgres' | 'mysql' | 'mongodb'; host: string; port: number; username: string; password: string; database: string; ssl: boolean };`,
   );
   files['src/config/env.d.ts'] = files['src/config/env.d.ts'].replace(
     '      CORS_ORIGINS: string;',
     `      CORS_ORIGINS: string;
-      DB_TYPE: '${databaseType}';
+      DB_TYPE: 'postgres' | 'mysql' | 'mongodb';
       DB_HOST: string;
       DB_PORT: number;
       DB_USERNAME: string;
@@ -74,7 +79,7 @@ function applyDatabase(files, packageJson, databaseType) {
   );
   files['src/config/env.validation.ts'] = files['src/config/env.validation.ts'].replace(
     '});\n',
-    `  DB_TYPE: Joi.string().valid('${databaseType}').required(),
+    `  DB_TYPE: Joi.string().valid('postgres', 'mysql', 'mongodb').required(),
   DB_HOST: Joi.string().required(),
   DB_PORT: Joi.number().required(),
   DB_USERNAME: Joi.string().required(),
@@ -84,65 +89,63 @@ function applyDatabase(files, packageJson, databaseType) {
 });\n`,
   );
 
-  if (isMongo) {
-    files['src/health/health.controller.ts'] = `import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckResult, HealthCheckService } from '@nestjs/terminus';
-
-@Controller('health')
-export class HealthController {
-  constructor(private readonly health: HealthCheckService) {}
-
-  @Get()
-  @HealthCheck()
-  check(): Promise<HealthCheckResult> {
-    return this.health.check([]);
-  }
-}
-`;
-  } else {
-    files['src/health/health.controller.ts'] = `import { Controller, Get } from '@nestjs/common';
+  files['src/health/health.controller.ts'] = `import { Controller, Get } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckResult, HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus';
 
+@ApiTags('health')
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthCheckService, private readonly db: TypeOrmHealthIndicator) {}
 
   @Get()
   @HealthCheck()
+  @ApiOperation({ summary: 'Check application and database health' })
+  @ApiOkResponse({ description: 'Application and database are healthy' })
   check(): Promise<HealthCheckResult> {
     return this.health.check([() => this.db.pingCheck('database', { timeout: 1000 })]);
   }
 }
 `;
-    delete files['src/health/health.controller.spec.ts'];
-  }
+  delete files['src/health/health.controller.spec.ts'];
   addDatabaseEnvironment(files, databaseType);
 }
 
 function applyMigrations(files, packageJson, databaseType) {
   packageJson.dependencies = { ...packageJson.dependencies, dotenv: '^17.0.0' };
   packageJson.devDependencies = { ...packageJson.devDependencies, 'typeorm-ts-node-esm': '^0.3.20' };
-  if (!files['src/config/env.config.types.ts']?.includes(`type: '${databaseType}'`)) {
+  if (!files['src/config/env.config.types.ts']?.includes("type: 'postgres' | 'mysql' | 'mongodb'")) {
     throw new Error('Select a database before adding TypeORM migrations.');
   }
   if (!dependencies[databaseType] || databaseType === 'mongodb') {
     throw new Error('TypeORM schema migrations are only scaffolded for PostgreSQL and MySQL.');
   }
-  if (!files['src/database/data-source.ts']) files['src/database/data-source.ts'] = `import 'dotenv/config';
-import { DataSource } from 'typeorm';
+  if (!files['src/database/data-source.ts']) files['src/database/data-source.ts'] = `import { config } from 'dotenv';
+import { DataSource, DataSourceOptions } from 'typeorm';
 
-export default new DataSource({
-  type: '${databaseType}',
+config({ path: [\`.env.\${process.env.NODE_ENV ?? 'development'}\`, '.env'] });
+
+const common = {
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT),
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
   synchronize: false,
   entities: ['src/**/*.entity.ts', 'dist/src/**/*.entity.js'],
   migrations: ['src/database/migrations/*.ts', 'dist/src/database/migrations/*.js'],
-});
+};
+const databaseType = process.env.DB_TYPE;
+if (databaseType === 'mongodb') {
+  throw new Error('TypeORM schema migrations are only supported for DB_TYPE=postgres or DB_TYPE=mysql');
+}
+const options: DataSourceOptions = {
+  ...common,
+  type: databaseType,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+};
+
+export default new DataSource(options);
 `;
   files['src/database/migrations/.gitkeep'] ??= '';
   Object.assign(packageJson.scripts, {
@@ -156,16 +159,17 @@ export default new DataSource({
 }
 
 function addDatabaseEnvironment(files, databaseType) {
-  if (files['.env.example'].includes(`DB_TYPE=${databaseType}`)) return;
+  if (files['.env.example'].includes('DB_TYPE=')) return;
   const port = databaseType === 'mongodb' ? 27017 : databaseType === 'mysql' ? 3306 : 5432;
   const label = databaseType === 'mongodb' ? 'MongoDB' : databaseType === 'mysql' ? 'MySQL' : 'PostgreSQL';
-  files['.env.example'] += `\n# ${label} (use a dedicated, least-privileged database user)
-DB_TYPE=${databaseType}
-DB_HOST=localhost
+  files['.env.example'] += `\n# Database type: postgres, mysql, or mongodb. The selected default is ${label}.
+# All database settings are read at runtime; update this block to switch connections.
+DB_TYPE="${databaseType}"
+DB_HOST="localhost"
 DB_PORT=${port}
-DB_USERNAME=app_user
-DB_PASSWORD=change_me
-DB_NAME=app_db
+DB_USERNAME="app_user"
+DB_PASSWORD="change_me"
+DB_NAME="app_db"
 DB_SSL=false
 `;
 }

@@ -25,6 +25,9 @@ describe('init foundation', () => {
     expect(plan.generated['src/config/env.validation.ts']).toContain("NODE_ENV: Joi.string()");
     expect(plan.generated['src/config/env.validation.ts']).toContain('.valid(\'development\', \'staging\', \'production\')');
     expect(plan.generated['src/config/env.validation.ts']).toContain('.required()');
+    expect(plan.generated['src/config/env.validation.ts']).not.toContain('APP_ENV');
+    expect(plan.generated['src/config/env-file-path.ts']).toContain('process.env.NODE_ENV');
+    expect(plan.generated['src/config/env-file-path.ts']).not.toContain('APP_ENV');
     expect(plan.generated['src/config/configuration.ts']).toContain('const parsed = process.env;');
     expect(plan.generated['src/config/configuration.ts']).toContain('env: parsed.NODE_ENV');
     expect(plan.generated['src/config/configuration.ts']).not.toContain('Number(process.env');
@@ -34,6 +37,10 @@ describe('init foundation', () => {
     expect(plan.generated['package.json']).not.toContain('node-flow');
     expect(plan.generated['src/health/health.controller.ts']).toContain('HealthCheckService');
     expect(plan.generated['src/health/health.module.ts']).toContain('TerminusModule');
+    expect(plan.generated['src/health/health.controller.ts']).toContain("@ApiTags('health')");
+    expect(plan.generated['src/common/interfaces/api-response.interface.ts']).toContain('@ApiProperty');
+    expect(plan.generated['.env.example']).toContain('NODE_ENV="development"');
+    expect(plan.generated['.env.example']).toContain('PORT=3000');
     expect(plan.generated['.env.development.example']).toBeUndefined();
   });
 
@@ -44,11 +51,13 @@ describe('init foundation', () => {
     expect(plan.generated['src/app.module.ts']).toContain('ThrottlerModule.forRoot');
     expect(plan.generated['src/instrumentation.ts']).toBeUndefined();
     expect(plan.generated['compose.jaeger.yml']).toBeUndefined();
-    expect(plan.generated['src/database/data-source.ts']).toContain("type: 'postgres'");
+    expect(plan.generated['src/database/data-source.ts']).toContain('type: databaseType');
+    expect(plan.generated['src/database/data-source.ts']).toContain('process.env.DB_TYPE');
     expect(plan.generated['src/config/env.d.ts']).toContain('DB_HOST: string');
     expect(plan.generated['src/config/configuration.ts']).toContain('host: parsed.DB_HOST');
     expect(plan.generated['src/config/env.validation.ts']).toContain('DB_HOST: Joi.string().required()');
-    expect(plan.generated['.env.example']).toContain('DB_HOST=localhost');
+    expect(plan.generated['.env.example']).toContain('DB_HOST="localhost"');
+    expect(plan.generated['.env.example']).toContain('# Database type: postgres, mysql, or mongodb.');
     expect(Object.keys(plan.manifest.presets)).toEqual(expect.arrayContaining(['database', 'migrations', 'rate-limit']));
     expect(plan.manifest.presets.database).toMatchObject({ type: 'postgres', migrations: true });
     expect(plan.generated['package.json']).not.toContain('@opentelemetry/');
@@ -61,18 +70,21 @@ describe('init foundation', () => {
     const mysql = buildPlan(project(), '0.1.0', undefined, ['database'], { type: 'mysql', migrations: false });
     const mysqlPackage = JSON.parse(mysql.generated['package.json']);
     expect(mysqlPackage.dependencies.mysql2).toBeDefined();
-    expect(mysql.generated['src/app.module.ts']).toContain("type: 'mysql'");
+    expect(mysqlPackage.dependencies.pg).toBeDefined();
+    expect(mysqlPackage.dependencies.mongodb).toBeDefined();
+    expect(mysql.generated['src/app.module.ts']).toContain("db.type === 'mongodb'");
+    expect(mysql.generated['src/app.module.ts']).toContain('type: db.type');
     expect(mysql.generated['src/database/data-source.ts']).toBeUndefined();
     expect(mysqlPackage.scripts['migration:run']).toBeUndefined();
 
     const mongo = buildPlan(project(), '0.1.0', undefined, ['database'], { type: 'mongodb', migrations: false });
     const mongoPackage = JSON.parse(mongo.generated['package.json']);
     expect(mongoPackage.dependencies.mongodb).toBeDefined();
-    expect(mongo.generated['src/app.module.ts']).toContain("type: 'mongodb'");
+    expect(mongo.generated['src/config/env.validation.ts']).toContain(".valid('postgres', 'mysql', 'mongodb')");
     expect(mongo.generated['src/app.module.ts']).toContain('tls: db.ssl');
     expect(mongo.generated['src/database/data-source.ts']).toBeUndefined();
     expect(mongoPackage.scripts['migration:run']).toBeUndefined();
-    expect(mongo.generated['src/health/health.controller.ts']).toContain('this.health.check([])');
+    expect(mongo.generated['src/health/health.controller.ts']).toContain("this.db.pingCheck('database'");
 
     expect(() => buildPlan(project(), '0.1.0', undefined, ['database'], { type: 'mongodb', migrations: true })).toThrow('not generated for MongoDB');
   });

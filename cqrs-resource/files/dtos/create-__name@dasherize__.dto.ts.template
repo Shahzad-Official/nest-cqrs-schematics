@@ -1,6 +1,10 @@
+<% if (swagger) { %>import { ApiProperty } from '@nestjs/swagger';
+<% } %>
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class Create<%= classify(name) %>Dto {
+<% if (swagger) { %>  @ApiProperty({ example: 'Example' })
+<% } %>
   @IsString()
   @IsNotEmpty()
   name: string;

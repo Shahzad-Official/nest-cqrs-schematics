@@ -29,24 +29,31 @@ export default function cqrsResource(options) {
 
   const featurePath = `src/features/${feature}`;
 
-  return chain([
-    registerFeatureModule({ feature, featurePath }),
-    mergeWith(
-      apply(url('./files'), [
-        filter((path) => {
-          if (!crud) {
-            return (
-              path.includes('/entities/') || path.endsWith('.module.ts.template')
-            );
-          }
-          return spec || !path.endsWith('.spec.ts.template');
-        }),
-        template({ ...strings, feature, name, crud, spec }),
-        renameTemplateFiles(),
-        move(featurePath),
-      ]),
-    ),
-  ]);
+  return (tree, context) => {
+    const packageFile = tree.read('/package.json');
+    const packageJson = packageFile ? JSON.parse(packageFile.toString()) : {};
+    const packages = { ...packageJson.dependencies, ...packageJson.devDependencies };
+    const swagger = Boolean(packages['@nestjs/swagger']);
+
+    return chain([
+      registerFeatureModule({ feature, featurePath }),
+      mergeWith(
+        apply(url('./files'), [
+          filter((path) => {
+            if (!crud) {
+              return (
+                path.includes('/entities/') || path.endsWith('.module.ts.template')
+              );
+            }
+            return spec || !path.endsWith('.spec.ts.template');
+          }),
+          template({ ...strings, feature, name, crud, spec, swagger }),
+          renameTemplateFiles(),
+          move(featurePath),
+        ]),
+      ),
+    ])(tree, context);
+  };
 }
 
 function registerFeatureModule({ feature, featurePath }) {

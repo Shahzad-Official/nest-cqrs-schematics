@@ -1,6 +1,10 @@
+<% if (swagger) { %>import { ApiPropertyOptional } from '@nestjs/swagger';
+<% } %>
 import { IsOptional, IsString } from 'class-validator';
 
 export class Update<%= classify(name) %>Dto {
+<% if (swagger) { %>  @ApiPropertyOptional({ example: 'Updated example' })
+<% } %>
   @IsOptional()
   @IsString()
   name?: string;
