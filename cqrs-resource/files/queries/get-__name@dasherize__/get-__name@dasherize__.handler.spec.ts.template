@@ -1,5 +1,5 @@
-import { Get<%= classify(name) %>Handler } from './get-<%= dasherize(name) %>.handler.js';
-import { Get<%= classify(name) %>Query } from './get-<%= dasherize(name) %>.query.js';
+import { Get<%= classify(name) %>Handler } from './get-<%= dasherize(name) %>.handler';
+import { Get<%= classify(name) %>Query } from './get-<%= dasherize(name) %>.query';
 
 describe('Get<%= classify(name) %>Handler', () => {
   it('returns the scaffold response', async () => {

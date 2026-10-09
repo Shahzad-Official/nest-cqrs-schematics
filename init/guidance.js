@@ -183,7 +183,7 @@ function codebaseMapBlock({ selectedPresets, dummyFeature }) {
       '',
       '- `test/database.integration-spec.ts` — explicit real-database readiness test.',
       '- `test/setup-integration-env.ts` — requires opt-in and explicit database connection variables.',
-      '- `vitest.config.integration.ts` — isolated database integration-test configuration.',
+      '- `test/jest-integration.json` — isolated database integration-test configuration.',
       '',
     );
   }
@@ -199,8 +199,8 @@ function codebaseMapBlock({ selectedPresets, dummyFeature }) {
     '## Tests and tooling',
     '',
     '- `test/app.e2e-spec.ts` — generated application E2E health test.',
-    '- `vitest.config.ts` — unit-test configuration.',
-    '- `vitest.config.e2e.ts` — E2E-test configuration.',
+    '- Nest CLI\'s existing Jest configuration — unit-test configuration.',
+    '- `test/jest-e2e.json` — Nest CLI\'s E2E-test configuration.',
     '- `.env.example` — documented starter environment values.',
     '- `.nest-cqrs.json` — completed initializer manifest.',
   );
@@ -235,11 +235,11 @@ export function renderGuidanceFiles({ packageManager, packageJson, selectedPrese
       '## Engineering rules',
       '',
       '- Preserve the feature-first NestJS CQRS architecture and existing module boundaries.',
-      '- Use strict TypeScript, ESM/NodeNext conventions, and `.js` suffixes in relative imports.',
+      '- Use strict TypeScript and preserve the Nest CLI starter\'s NodeNext import conventions.',
       '- Read environment values through the typed, Joi-validated configuration layer. Do not introduce scattered direct environment access in application code.',
       '- Preserve DTO validation, the global validation pipe, response interception, exception handling, and structured Pino logging conventions.',
       '- Do not log credentials, tokens, connection strings, or other secrets.',
-      '- Add or update proportionate Vitest coverage for behavior changes.',
+      '- Add or update proportionate Jest coverage for behavior changes.',
       '- Keep linting, formatting, build, unit tests, and E2E tests passing when relevant to the task.',
       '',
       '## Project commands',

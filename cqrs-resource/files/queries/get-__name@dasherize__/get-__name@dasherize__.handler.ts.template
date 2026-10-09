@@ -1,5 +1,5 @@
 import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
-import { Get<%= classify(name) %>Query } from './get-<%= dasherize(name) %>.query.js';
+import { Get<%= classify(name) %>Query } from './get-<%= dasherize(name) %>.query';
 
 @QueryHandler(Get<%= classify(name) %>Query)
 export class Get<%= classify(name) %>Handler implements IQueryHandler<Get<%= classify(name) %>Query> {

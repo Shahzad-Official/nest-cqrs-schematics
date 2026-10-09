@@ -31,15 +31,16 @@ export function applyPresets({ files, packageJson, selected, databaseType, migra
   if (enabled.has('migrations')) applyMigrations(files, packageJson, databaseType);
   else if (migrations && enabled.has('database')) applyMigrations(files, packageJson, databaseType);
   if (enabled.has('rate-limit')) {
-    packageJson.dependencies = { ...packageJson.dependencies, '@nestjs/throttler': '^6.0.0' };
+    packageJson.dependencies = { '@nestjs/throttler': '^6.0.0', ...packageJson.dependencies };
     let app = addImport(files['src/app.module.ts'], "import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';");
     app = app.replace('import { APP_FILTER, APP_INTERCEPTOR }', 'import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR }');
     app = addModuleImport(app, 'ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }])');
     files['src/app.module.ts'] = addProvider(app, 'ThrottlerGuard');
-    files['test/rate-limit.e2e-spec.ts'] ??= `import { Test } from '@nestjs/testing';
+    files['test/rate-limit.e2e-spec.ts'] ??= `import './setup-env';
+import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
-import { AppModule } from '../src/app.module.js';
+import { AppModule } from '../src/app.module';
 
 describe('rate limiting (e2e)', () => {
   let app: NestFastifyApplication;
@@ -65,14 +66,16 @@ describe('rate limiting (e2e)', () => {
 }
 
 function applyDatabase(files, packageJson, databaseType) {
-  const drivers = Object.assign(
-    {},
-    ...Object.values(dependencies).map((items) =>
-      Object.fromEntries(Object.entries(items).filter(([name]) => name !== 'typeorm')),
-    ),
+  packageJson.dependencies = {
+    '@nestjs/typeorm': '^12.0.0',
+    ...dependencies[databaseType],
+    ...packageJson.dependencies,
+  };
+  packageJson.scripts = { ...packageJson.scripts, 'test:integration': 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-integration.json' };
+  files['test/setup-env.ts'] = files['test/setup-env.ts'].replace(
+    "DB_TYPE: 'postgres'",
+    `DB_TYPE: '${databaseType}'`,
   );
-  packageJson.dependencies = { ...packageJson.dependencies, '@nestjs/typeorm': '^12.0.0', typeorm: '^1.1.1', ...drivers };
-  packageJson.scripts = { ...packageJson.scripts, 'test:integration': 'vitest run --config ./vitest.config.integration.ts' };
 
   const typeormOptions = `const common = { host: db.host, port: db.port, username: db.username, password: db.password, database: db.database, autoLoadEntities: true, synchronize: false, manualInitialization: config.getOrThrow('env', { infer: true }) === 'test' };
         return db.type === 'mongodb'
@@ -122,7 +125,7 @@ function applyDatabase(files, packageJson, databaseType) {
 
   files['src/health/health.controller.ts'] = `import { Controller, Get } from '@nestjs/common';
 import { HealthCheck, HealthCheckResult, HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus';
-import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../common/decorators/api-response.decorator.js';
+import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../common/decorators/api-response.decorator';
 
 @Controller('health')
 export class HealthController {
@@ -151,25 +154,19 @@ export class HealthController {
     '',
   );
   files['test/app.e2e-spec.ts'] = files['test/app.e2e-spec.ts'].replace(
-    "import { AppModule } from '../src/app.module.js';",
-    "import { DataSource } from 'typeorm';\nimport { getDataSourceToken } from '@nestjs/typeorm';\nimport { AppModule } from '../src/app.module.js';",
+    "import { AppModule } from '../src/app.module';",
+    "import { DataSource } from 'typeorm';\nimport { getDataSourceToken } from '@nestjs/typeorm';\nimport { AppModule } from '../src/app.module';",
   ).replace(
     "    await app.getHttpAdapter().getInstance().ready();",
     "    await app.getHttpAdapter().getInstance().ready();\n    expect(app.get<DataSource>(getDataSourceToken()).isInitialized).toBe(false);",
   );
-  files['vitest.config.integration.ts'] ??= `import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
-
-export default defineConfig({
-  plugins: [tsconfigPaths()],
-  test: {
-    globals: true,
-    root: './',
-    include: ['test/**/*.integration-spec.ts'],
-    setupFiles: ['./test/setup-integration-env.ts'],
-  },
-});
-`;
+  files['test/jest-integration.json'] ??= `${JSON.stringify({
+    moduleFileExtensions: ['js', 'json', 'ts'],
+    rootDir: '..',
+    testEnvironment: 'node',
+    testRegex: '.integration-spec.ts$',
+    transform: { '^.+\\.(t|j)s$': 'ts-jest' },
+  }, null, 2)}\n`;
   files['test/setup-integration-env.ts'] ??= `if (process.env.RUN_DATABASE_INTEGRATION !== 'true') {
   throw new Error('Set RUN_DATABASE_INTEGRATION=true and explicit DB_* variables to run database integration tests.');
 }
@@ -188,10 +185,11 @@ Object.assign(process.env, {
   CORS_ORIGINS: '',
 });
 `;
-  files['test/database.integration-spec.ts'] ??= `import { Test } from '@nestjs/testing';
+  files['test/database.integration-spec.ts'] ??= `import './setup-integration-env';
+import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
-import { AppModule } from '../src/app.module.js';
+import { AppModule } from '../src/app.module';
 
 describe('database readiness (integration)', () => {
   let app: NestFastifyApplication;
@@ -210,8 +208,8 @@ describe('database readiness (integration)', () => {
 }
 
 function applyMigrations(files, packageJson, databaseType) {
-  packageJson.dependencies = { ...packageJson.dependencies, dotenv: '^17.0.0' };
-  packageJson.devDependencies = { ...packageJson.devDependencies, 'typeorm-ts-node-esm': '^0.3.20' };
+  packageJson.dependencies = { dotenv: '^17.0.0', ...packageJson.dependencies };
+  packageJson.devDependencies = { 'typeorm-ts-node-esm': '^0.3.20', ...packageJson.devDependencies };
   if (!files['src/config/env.config.types.ts']?.includes("type: 'postgres' | 'mysql' | 'mongodb'")) {
     throw new Error('Select a database before adding TypeORM migrations.');
   }
@@ -230,8 +228,8 @@ const common = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   synchronize: false,
-  entities: ['src/**/*.entity.ts', 'dist/src/**/*.entity.js'],
-  migrations: ['src/database/migrations/*.ts', 'dist/src/database/migrations/*.js'],
+  entities: ['src/**/*.entity.ts', 'dist/src/**/*.entity'],
+  migrations: ['src/database/migrations/*.ts', 'dist/src/database/migrations/*'],
 };
 const databaseType = process.env.DB_TYPE;
 if (databaseType === 'mongodb') {
@@ -252,7 +250,7 @@ export default new DataSource(options);
       'migration:show': 'typeorm-ts-node-esm migration:show -d src/database/data-source.ts',
       'migration:run': 'typeorm-ts-node-esm migration:run -d src/database/data-source.ts',
       'migration:revert': 'typeorm-ts-node-esm migration:revert -d src/database/data-source.ts',
-      'migration:run:prod': 'typeorm migration:run -d dist/src/database/data-source.js',
+      'migration:run:prod': 'typeorm migration:run -d dist/src/database/data-source',
   });
 }
 

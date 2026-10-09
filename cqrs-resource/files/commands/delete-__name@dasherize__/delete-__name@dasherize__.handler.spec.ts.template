@@ -1,5 +1,5 @@
-import { Delete<%= classify(name) %>Command } from './delete-<%= dasherize(name) %>.command.js';
-import { Delete<%= classify(name) %>Handler } from './delete-<%= dasherize(name) %>.handler.js';
+import { Delete<%= classify(name) %>Command } from './delete-<%= dasherize(name) %>.command';
+import { Delete<%= classify(name) %>Handler } from './delete-<%= dasherize(name) %>.handler';
 
 describe('Delete<%= classify(name) %>Handler', () => {
   it('returns the scaffold response', async () => {

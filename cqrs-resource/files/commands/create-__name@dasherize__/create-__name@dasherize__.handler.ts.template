@@ -1,5 +1,5 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
-import { Create<%= classify(name) %>Command } from './create-<%= dasherize(name) %>.command.js';
+import { Create<%= classify(name) %>Command } from './create-<%= dasherize(name) %>.command';
 
 @CommandHandler(Create<%= classify(name) %>Command)
 export class Create<%= classify(name) %>Handler

@@ -16,9 +16,14 @@ The initializer configures:
 - consistent success and error responses;
 - health checks;
 - Swagger/OpenAPI support controlled by configuration;
-- Vitest, E2E tests, Oxlint, and Prettier;
+- E2E tests that use the Nest CLI starter's existing Jest setup;
 - coding-agent guidance in `AGENTS.md` and `agents/`;
 - optional database, migration, and rate-limit integrations.
+
+The initializer preserves the Nest CLI starter's scripts, Jest/Oxlint/Prettier
+dependencies and configuration, TypeScript configuration, and Nest CLI
+configuration. Existing dependency versions are retained; the initializer only
+adds packages required by the generated foundation and selected presets.
 
 ## Prerequisites
 

@@ -6,7 +6,17 @@ import { addPresets, approvePnpmBuilds, applyPlan, buildPlan, ensureGitignore, i
 function project(): string {
   const root = mkdtempSync(join(tmpdir(), 'nest-cqrs-init-'));
   mkdirSync(join(root, 'src'), { recursive: true });
-  writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { '@nestjs/core': '^12.0.0', '@nestjs/platform-express': '^12.0.0' }, scripts: {} }));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({
+    scripts: {
+      build: 'nest build',
+      format: 'prettier --write "src/**/*.ts" "test/**/*.ts"',
+      lint: 'oxlint --type-aware src/ test/',
+      test: 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js',
+      'test:e2e': 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json',
+    },
+    dependencies: { '@nestjs/core': '^12.0.1', '@nestjs/platform-express': '^12.0.1' },
+    devDependencies: { jest: '^30.0.0', oxlint: '^1.58.0', prettier: '^3.4.2', typescript: '^6.0.2' },
+  }));
   writeFileSync(join(root, 'nest-cli.json'), JSON.stringify({ collection: '@nestjs/schematics', sourceRoot: 'src' }));
   writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }));
   writeFileSync(join(root, 'src/main.ts'), 'default');
@@ -212,8 +222,17 @@ describe('init foundation', () => {
     expect(plan.generated['src/app.module.ts']).not.toContain('TypeOrmModule');
     expect(plan.generated['src/app.module.ts']).not.toContain('ThrottlerGuard');
     expect(plan.generated['package.json']).not.toContain('node-flow');
-    expect(JSON.parse(plan.generated['tsconfig.json']).compilerOptions.baseUrl).toBeUndefined();
-    expect(JSON.parse(plan.generated['package.json']).scripts.format).toBe('prettier --write . --ignore-unknown');
+    expect(plan.generated['tsconfig.json']).toBeUndefined();
+    expect(plan.generated['nest-cli.json']).toBeUndefined();
+    expect(JSON.parse(plan.generated['package.json']).scripts.format).toBe('prettier --write "src/**/*.ts" "test/**/*.ts"');
+    expect(JSON.parse(plan.generated['package.json']).devDependencies).toMatchObject({
+      jest: '^30.0.0',
+      oxlint: '^1.58.0',
+      prettier: '^3.4.2',
+      typescript: '^6.0.2',
+    });
+    expect(plan.generated['vitest.config.ts']).toBeUndefined();
+    expect(plan.generated['vitest.config.e2e.ts']).toBeUndefined();
     expect(plan.generated['src/health/health.controller.ts']).toContain('HealthCheckService');
     expect(plan.generated['src/health/health.module.ts']).toContain('TerminusModule');
     expect(plan.generated['src/health/health.controller.ts']).toContain("@Get('live')");
@@ -223,7 +242,7 @@ describe('init foundation', () => {
     expect(plan.generated['test/setup-env.ts']).toContain("SWAGGER_ENABLED: 'true'");
     expect(plan.generated['test/setup-env.ts']).toContain("CORS_ORIGINS: ''");
     expect(plan.generated['test/setup-env.ts']).toContain("DB_HOST: '127.0.0.1'");
-    expect(plan.generated['vitest.config.e2e.ts']).toContain("setupFiles: ['./test/setup-env.ts']");
+    expect(plan.generated['test/app.e2e-spec.ts']).toContain("import './setup-env'");
     expect(plan.generated['.env.test.example']).toBeUndefined();
     expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiSuccessEnvelope');
     expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiErrorEnvelope');
@@ -259,8 +278,8 @@ describe('init foundation', () => {
     expect(plan.generated['test/app.e2e-spec.ts']).toContain('getDataSourceToken()');
     expect(plan.generated['test/database.integration-spec.ts']).toContain("GET /api/health/ready");
     expect(plan.generated['test/setup-integration-env.ts']).toContain('RUN_DATABASE_INTEGRATION');
-    expect(plan.generated['vitest.config.integration.ts']).toContain('test/**/*.integration-spec.ts');
-    expect(JSON.parse(plan.generated['package.json']).scripts['test:integration']).toContain('vitest.config.integration.ts');
+    expect(plan.generated['test/jest-integration.json']).toContain('.integration-spec.ts$');
+    expect(JSON.parse(plan.generated['package.json']).scripts['test:integration']).toContain('test/jest-integration.json');
     expect(plan.generated['.env.example']).toContain('DB_HOST="localhost"');
     expect(plan.generated['.env.example']).toContain('# Database type: postgres, mysql, or mongodb.');
     expect(Object.keys(plan.manifest.presets)).toEqual(expect.arrayContaining(['database', 'migrations', 'rate-limit']));
@@ -276,8 +295,8 @@ describe('init foundation', () => {
     const mysql = buildPlan(project(), '0.1.0', undefined, ['database'], { type: 'mysql', migrations: false });
     const mysqlPackage = JSON.parse(mysql.generated['package.json']);
     expect(mysqlPackage.dependencies.mysql2).toBeDefined();
-    expect(mysqlPackage.dependencies.pg).toBeDefined();
-    expect(mysqlPackage.dependencies.mongodb).toBeDefined();
+    expect(mysqlPackage.dependencies.pg).toBeUndefined();
+    expect(mysqlPackage.dependencies.mongodb).toBeUndefined();
     expect(mysql.generated['src/app.module.ts']).toContain("db.type === 'mongodb'");
     expect(mysql.generated['src/app.module.ts']).toContain('type: db.type');
     expect(mysql.generated['src/database/data-source.ts']).toBeUndefined();
@@ -286,6 +305,8 @@ describe('init foundation', () => {
     const mongo = buildPlan(project(), '0.1.0', undefined, ['database'], { type: 'mongodb', migrations: false });
     const mongoPackage = JSON.parse(mongo.generated['package.json']);
     expect(mongoPackage.dependencies.mongodb).toBeDefined();
+    expect(mongoPackage.dependencies.pg).toBeUndefined();
+    expect(mongoPackage.dependencies.mysql2).toBeUndefined();
     expect(mongo.generated['src/config/env.validation.ts']).toContain(".valid('postgres', 'mysql', 'mongodb')");
     expect(mongo.generated['src/app.module.ts']).toContain('tls: db.ssl');
     expect(mongo.generated['src/database/data-source.ts']).toBeUndefined();

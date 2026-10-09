@@ -2,16 +2,16 @@ import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/commo
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 <% if (swagger) { %>import { ApiOperation, ApiTags } from '@nestjs/swagger';
 <% } %>
-<% if (swagger) { %>import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../../../common/decorators/api-response.decorator.js';
+<% if (swagger) { %>import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../../../common/decorators/api-response.decorator';
 <% } %>
-import { Create<%= classify(name) %>Command } from '../commands/create-<%= dasherize(name) %>/create-<%= dasherize(name) %>.command.js';
-import { Delete<%= classify(name) %>Command } from '../commands/delete-<%= dasherize(name) %>/delete-<%= dasherize(name) %>.command.js';
-import { Update<%= classify(name) %>Command } from '../commands/update-<%= dasherize(name) %>/update-<%= dasherize(name) %>.command.js';
-import { Create<%= classify(name) %>Dto } from '../dtos/create-<%= dasherize(name) %>.dto.js';
-import { <%= classify(name) %>ParamsDto } from '../dtos/<%= dasherize(name) %>-params.dto.js';
-import { Update<%= classify(name) %>Dto } from '../dtos/update-<%= dasherize(name) %>.dto.js';
-import { Get<%= classify(name) %>Query } from '../queries/get-<%= dasherize(name) %>/get-<%= dasherize(name) %>.query.js';
-import { List<%= classify(feature) %>Query } from '../queries/list-<%= dasherize(feature) %>/list-<%= dasherize(feature) %>.query.js';
+import { Create<%= classify(name) %>Command } from '../commands/create-<%= dasherize(name) %>/create-<%= dasherize(name) %>.command';
+import { Delete<%= classify(name) %>Command } from '../commands/delete-<%= dasherize(name) %>/delete-<%= dasherize(name) %>.command';
+import { Update<%= classify(name) %>Command } from '../commands/update-<%= dasherize(name) %>/update-<%= dasherize(name) %>.command';
+import { Create<%= classify(name) %>Dto } from '../dtos/create-<%= dasherize(name) %>.dto';
+import { <%= classify(name) %>ParamsDto } from '../dtos/<%= dasherize(name) %>-params.dto';
+import { Update<%= classify(name) %>Dto } from '../dtos/update-<%= dasherize(name) %>.dto';
+import { Get<%= classify(name) %>Query } from '../queries/get-<%= dasherize(name) %>/get-<%= dasherize(name) %>.query';
+import { List<%= classify(feature) %>Query } from '../queries/list-<%= dasherize(feature) %>/list-<%= dasherize(feature) %>.query';
 
 <% if (swagger) { %>@ApiTags('<%= dasherize(feature) %>')
 <% } %>

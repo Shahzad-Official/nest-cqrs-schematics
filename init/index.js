@@ -10,6 +10,10 @@ const manifestPath = '.nest-cqrs.json';
 const pendingPath = '.nest-cqrs.pending.json';
 const gitignoreEntries = ['.env', '.env.development', '.env.staging', '.env.production', pendingPath];
 const hash = (value) => createHash('sha256').update(value).digest('hex');
+const addMissing = (existing = {}, additions) => Object.fromEntries([
+  ...Object.entries(additions),
+  ...Object.entries(existing),
+]);
 
 function gitignoreAppend(root) {
   const path = resolve(root, '.gitignore');
@@ -39,25 +43,9 @@ export function ensureGitignore(root, dryRun = false) {
 export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = [], databaseOptions = {}) {
   const packagePath = resolve(root, 'package.json');
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
-  packageJson.type = 'module';
-  packageJson.scripts = {
-    ...packageJson.scripts,
-    build: 'nest build',
-    format: 'prettier --write . --ignore-unknown',
-    start: 'nest start',
-    'start:dev': 'nest start --watch',
-    'start:debug': 'nest start --debug --watch',
-    'start:prod': 'node dist/src/main.js',
-    lint: 'oxlint --type-aware src/ test/',
-    test: 'vitest run',
-    'test:watch': 'vitest',
-    'test:cov': 'vitest run --coverage',
-    'test:e2e': 'vitest run --config ./vitest.config.e2e.ts',
-  };
-  packageJson.dependencies = { ...packageJson.dependencies, ...runtimeDependencies };
+  packageJson.dependencies = addMissing(packageJson.dependencies, runtimeDependencies);
   delete packageJson.dependencies?.['@nestjs/platform-express'];
-  packageJson.devDependencies = { ...packageJson.devDependencies, ...devDependencies };
-  packageJson.devDependencies.typescript ??= '^6.0.0';
+  packageJson.devDependencies = addMissing(packageJson.devDependencies, devDependencies);
 
   const generated = { ...files };
   const normalizedPresets = new Set(selectedPresets);
@@ -77,22 +65,6 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
     dummyFeature,
   }));
   generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
-  const nestCli = JSON.parse(readFileSync(resolve(root, 'nest-cli.json'), 'utf8'));
-  nestCli.collection = '@nestjs/schematics';
-  generated['nest-cli.json'] = `${JSON.stringify(nestCli, null, 2)}\n`;
-
-  const tsconfigPath = resolve(root, 'tsconfig.json');
-  const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf8'));
-  Object.assign(tsconfig.compilerOptions, {
-    module: 'nodenext',
-    moduleResolution: 'nodenext',
-    target: 'ES2023',
-    strict: true,
-    ignoreDeprecations: '6.0',
-    types: ['vitest/globals', 'node'],
-  });
-  delete tsconfig.compilerOptions.baseUrl;
-  generated['tsconfig.json'] = `${JSON.stringify(tsconfig, null, 2)}\n`;
 
   const manifest = {
     manifestVersion: 1,
@@ -129,10 +101,6 @@ export function applyPlan(root, plan, dryRun) {
     'src/main.ts',
     'src/app.module.ts',
     'package.json',
-    'nest-cli.json',
-    'tsconfig.json',
-    'vitest.config.ts',
-    'vitest.config.e2e.ts',
     'test/app.e2e-spec.ts',
   ];
 
@@ -334,7 +302,7 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     'src/health/health.controller.ts', 'src/health/health.module.ts', 'src/health/health.controller.spec.ts',
     'src/database/data-source.ts', 'src/database/migrations/.gitkeep', 'test/app.e2e-spec.ts',
     'test/rate-limit.e2e-spec.ts',
-    'test/database.integration-spec.ts', 'test/setup-integration-env.ts', 'vitest.config.integration.ts', '.env.example',
+    'test/database.integration-spec.ts', 'test/setup-integration-env.ts', 'test/jest-integration.json', '.env.example',
   ];
   const generated = Object.fromEntries(controlledPaths.filter((path) => existsSync(resolve(root, path))).map((path) => [path, readFileSync(resolve(root, path), 'utf8')]));
   const originalPaths = new Set(Object.keys(generated));

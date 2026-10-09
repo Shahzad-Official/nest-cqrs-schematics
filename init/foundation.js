@@ -3,8 +3,6 @@ import { GUIDANCE_FOUNDATION_VERSION } from './guidance.js';
 export const FOUNDATION_VERSION = GUIDANCE_FOUNDATION_VERSION;
 
 export const runtimeDependencies = {
-  '@fastify/cors': '^11.0.0',
-  '@fastify/static': '^10.0.0',
   '@nestjs/config': '^12.0.0',
   '@nestjs/cqrs': '^12.0.0',
   '@nestjs/platform-fastify': '^12.0.0',
@@ -19,15 +17,7 @@ export const runtimeDependencies = {
 };
 
 export const devDependencies = {
-  '@types/supertest': '^7.0.0',
-  '@vitest/coverage-v8': '^4.0.0',
-  oxlint: '^1.50.0',
-  'oxlint-tsgolint': '^7.0.0',
   'pino-pretty': '^13.0.0',
-  prettier: '^3.4.0',
-  supertest: '^7.0.0',
-  'vite-tsconfig-paths': '^5.0.0',
-  vitest: '^4.0.0',
 };
 
 export const files = {
@@ -37,8 +27,8 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
-import { AppModule } from './app.module.js';
-import { EnvConfig } from './config/env.config.types.js';
+import { AppModule } from './app.module';
+import { EnvConfig } from './config/env.config.types';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -81,20 +71,20 @@ async function bootstrap(): Promise<void> {
   await app.listen(config.getOrThrow('port', { infer: true }), '0.0.0.0');
 }
 
-await bootstrap();
+void bootstrap();
 `,
   'src/app.module.ts': `import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
-import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
-import { configuration } from './config/configuration.js';
-import { envFilePath } from './config/env-file-path.js';
-import { EnvConfig } from './config/env.config.types.js';
-import { envValidationSchema } from './config/env.validation.js';
-import { HealthModule } from './health/health.module.js';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { configuration } from './config/configuration';
+import { envFilePath } from './config/env-file-path';
+import { EnvConfig } from './config/env.config.types';
+import { envValidationSchema } from './config/env.validation';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -135,7 +125,7 @@ export const ResponseMessage = (message: string): MethodDecorator =>
 `,
   'src/common/decorators/api-response.decorator.ts': `import { applyDecorators, Type } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, getSchemaPath, ReferenceObject, SchemaObject } from '@nestjs/swagger';
-import { ApiErrorResponse, ApiSuccessResponse } from '../interfaces/api-response.interface.js';
+import { ApiErrorResponse, ApiSuccessResponse } from '../interfaces/api-response.interface';
 
 type ResponseSchema = SchemaObject | ReferenceObject;
 
@@ -214,7 +204,7 @@ export class ApiErrorResponse {
   'src/common/filters/global-exception.filter.ts': `import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from 'nestjs-pino';
-import { ApiErrorResponse } from '../interfaces/api-response.interface.js';
+import { ApiErrorResponse } from '../interfaces/api-response.interface';
 
 interface HttpErrorBody { error?: string; message?: string | string[] }
 
@@ -272,8 +262,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 import { Reflector } from '@nestjs/core';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { Observable, map } from 'rxjs';
-import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator.js';
-import { ApiSuccessResponse } from '../interfaces/api-response.interface.js';
+import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator';
+import { ApiSuccessResponse } from '../interfaces/api-response.interface';
 
 @Injectable()
 export class ResponseInterceptor<T> implements NestInterceptor<T, ApiSuccessResponse<T>> {
@@ -325,7 +315,7 @@ export class PaginationQueryDto {
   totalPages: number;
 }
 `,
-  'src/common/pagination/paginated-result.interface.ts': `import { PaginationMeta } from './pagination-meta.interface.js';
+  'src/common/pagination/paginated-result.interface.ts': `import { PaginationMeta } from './pagination-meta.interface';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -367,7 +357,7 @@ declare global {
   cors: { enabled: boolean; origins: string[] };
 };
 `,
-  'src/config/configuration.ts': `import { EnvConfig } from './env.config.types.js';
+  'src/config/configuration.ts': `import { EnvConfig } from './env.config.types';
 
 export function configuration(): EnvConfig {
   const parsed = process.env;
@@ -402,7 +392,7 @@ export const envValidationSchema = Joi.object({
 `,
   'src/health/health.controller.ts': `import { Controller, Get } from '@nestjs/common';
 import { HealthCheck, HealthCheckResult, HealthCheckService } from '@nestjs/terminus';
-import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../common/decorators/api-response.decorator.js';
+import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../common/decorators/api-response.decorator';
 
 @Controller('health')
 export class HealthController {
@@ -427,18 +417,18 @@ export class HealthController {
 `,
   'src/health/health.module.ts': `import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
-import { HealthController } from './health.controller.js';
+import { HealthController } from './health.controller';
 
 @Module({ imports: [TerminusModule], controllers: [HealthController] })
 export class HealthModule {}
 `,
   'src/health/health.controller.spec.ts': `import { HealthCheckService } from '@nestjs/terminus';
-import { HealthController } from './health.controller.js';
+import { HealthController } from './health.controller';
 
 describe('HealthController', () => {
   it('keeps liveness independent from external integrations', async () => {
     const result = { status: 'ok', info: {}, error: {}, details: {} } as const;
-    const check = vi.fn().mockResolvedValue(result);
+    const check = jest.fn().mockResolvedValue(result);
     const health = { check } as unknown as HealthCheckService;
     await expect(new HealthController(health).live()).resolves.toEqual(result);
     expect(check).toHaveBeenCalledWith([]);
@@ -446,7 +436,7 @@ describe('HealthController', () => {
 
   it('checks foundation readiness', async () => {
     const result = { status: 'ok', info: {}, error: {}, details: {} } as const;
-    const check = vi.fn().mockResolvedValue(result);
+    const check = jest.fn().mockResolvedValue(result);
     const health = { check } as unknown as HealthCheckService;
     await expect(new HealthController(health).ready()).resolves.toEqual(result);
     expect(check).toHaveBeenCalledWith([]);
@@ -466,27 +456,6 @@ LOG_LEVEL="debug"
 CORS_ENABLED=true
 CORS_ORIGINS="http://localhost:3000"
 `,
-  'vitest.config.ts': `import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
-
-export default defineConfig({
-  plugins: [tsconfigPaths()],
-  test: { globals: true, root: './', include: ['**/*.spec.ts'] },
-});
-`,
-  'vitest.config.e2e.ts': `import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
-
-export default defineConfig({
-  plugins: [tsconfigPaths()],
-  test: {
-    globals: true,
-    root: './',
-    include: ['test/**/*.e2e-spec.ts'],
-    setupFiles: ['./test/setup-env.ts'],
-  },
-});
-`,
   'test/setup-env.ts': `Object.assign(process.env, {
   NODE_ENV: 'test',
   PORT: '3000',
@@ -504,11 +473,12 @@ export default defineConfig({
   DB_SSL: 'false',
 });
 `,
-  'test/app.e2e-spec.ts': `import { Test } from '@nestjs/testing';
+  'test/app.e2e-spec.ts': `import './setup-env';
+import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import request from 'supertest';
-import { AppModule } from '../src/app.module.js';
+import { AppModule } from '../src/app.module';
 
 describe('health (e2e)', () => {
   let app: NestFastifyApplication;

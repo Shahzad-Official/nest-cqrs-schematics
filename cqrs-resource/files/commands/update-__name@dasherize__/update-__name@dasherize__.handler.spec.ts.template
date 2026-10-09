@@ -1,5 +1,5 @@
-import { Update<%= classify(name) %>Command } from './update-<%= dasherize(name) %>.command.js';
-import { Update<%= classify(name) %>Handler } from './update-<%= dasherize(name) %>.handler.js';
+import { Update<%= classify(name) %>Command } from './update-<%= dasherize(name) %>.command';
+import { Update<%= classify(name) %>Handler } from './update-<%= dasherize(name) %>.handler';
 
 describe('Update<%= classify(name) %>Handler', () => {
   it('returns the scaffold response', async () => {

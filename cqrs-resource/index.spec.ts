@@ -57,7 +57,7 @@ describe('cqrs-resource schematic', () => {
     expect(controller).toContain('private readonly commandBus: CommandBus');
     expect(controller).toContain('private readonly queryBus: QueryBus');
     expect(controller).toContain('new CreateStockItemCommand(createStockItemDto)');
-    expect(controller).toContain("from '../dtos/create-stock-item.dto.js'");
+    expect(controller).toContain("from '../dtos/create-stock-item.dto'");
 
     const paramsDto = tree.readContent(
       `${root}/dtos/stock-item-params.dto.ts`,

@@ -1,5 +1,5 @@
-import { Create<%= classify(name) %>Command } from './create-<%= dasherize(name) %>.command.js';
-import { Create<%= classify(name) %>Handler } from './create-<%= dasherize(name) %>.handler.js';
+import { Create<%= classify(name) %>Command } from './create-<%= dasherize(name) %>.command';
+import { Create<%= classify(name) %>Handler } from './create-<%= dasherize(name) %>.handler';
 
 describe('Create<%= classify(name) %>Handler', () => {
   it('returns the scaffold response', async () => {

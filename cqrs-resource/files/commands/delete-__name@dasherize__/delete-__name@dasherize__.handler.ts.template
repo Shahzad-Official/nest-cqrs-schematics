@@ -1,5 +1,5 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
-import { Delete<%= classify(name) %>Command } from './delete-<%= dasherize(name) %>.command.js';
+import { Delete<%= classify(name) %>Command } from './delete-<%= dasherize(name) %>.command';
 
 @CommandHandler(Delete<%= classify(name) %>Command)
 export class Delete<%= classify(name) %>Handler

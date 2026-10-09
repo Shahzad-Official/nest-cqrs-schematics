@@ -14,7 +14,13 @@ function createNestProject(name: string): string {
     name: `acceptance-${name}`,
     version: '0.0.0',
     private: true,
-    scripts: {},
+    scripts: {
+      build: 'nest build',
+      format: 'prettier --write "src/**/*.ts" "test/**/*.ts"',
+      lint: 'oxlint --type-aware src/ test/',
+      test: 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js',
+      'test:e2e': 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json',
+    },
     dependencies: {
       '@nestjs/common': '^12.0.0',
       '@nestjs/core': '^12.0.0',
@@ -25,8 +31,16 @@ function createNestProject(name: string): string {
     devDependencies: {
       '@nestjs/cli': '^12.0.0',
       '@nestjs/testing': '^12.0.0',
+      '@types/jest': '^30.0.0',
       '@types/node': '^24.0.0',
+      '@types/supertest': '^7.0.0',
+      jest: '^30.0.0',
+      oxlint: '^1.58.0',
+      'oxlint-tsgolint': '^7.0.2001',
+      prettier: '^3.4.2',
       'source-map-support': '^0.5.21',
+      supertest: '^7.0.0',
+      'ts-jest': '^29.4.0',
       'ts-loader': '^9.5.0',
       'ts-node': '^10.9.0',
       'tsconfig-paths': '^4.2.0',
@@ -34,18 +48,22 @@ function createNestProject(name: string): string {
     },
   }, null, 2)}\n`);
   writeFileSync(join(root, 'nest-cli.json'), `${JSON.stringify({ collection: '@nestjs/schematics', sourceRoot: 'src' }, null, 2)}\n`);
-  writeFileSync(join(root, 'pnpm-workspace.yaml'), "allowBuilds:\n  '@scarf/scarf': true\n");
+  writeFileSync(join(root, 'pnpm-workspace.yaml'), "allowBuilds:\n  '@parcel/watcher': true\n  '@scarf/scarf': true\n  unrs-resolver: true\n");
   writeFileSync(join(root, 'tsconfig.json'), `${JSON.stringify({
     compilerOptions: {
       declaration: true,
+      module: 'nodenext',
+      moduleResolution: 'nodenext',
+      isolatedModules: true,
       emitDecoratorMetadata: true,
       experimentalDecorators: true,
       removeComments: true,
       sourceMap: true,
       outDir: './dist',
-      baseUrl: './',
+      rootDir: '.',
       incremental: true,
       skipLibCheck: true,
+      types: ['node', 'jest'],
       strictNullChecks: true,
       noImplicitAny: false,
       strictBindCallApply: false,
@@ -54,6 +72,26 @@ function createNestProject(name: string): string {
     },
   }, null, 2)}\n`);
   writeFileSync(join(root, 'tsconfig.build.json'), `${JSON.stringify({ extends: './tsconfig.json', exclude: ['node_modules', 'test', 'dist', '**/*spec.ts'] }, null, 2)}\n`);
+  mkdirSync(join(root, 'test'), { recursive: true });
+  writeFileSync(join(root, 'test/jest-e2e.json'), `${JSON.stringify({
+    moduleFileExtensions: ['js', 'json', 'ts'],
+    rootDir: '.',
+    testEnvironment: 'node',
+    testRegex: '.e2e-spec.ts$',
+    transform: { '^.+\\.(t|j)s$': 'ts-jest' },
+  }, null, 2)}\n`);
+  writeFileSync(join(root, 'jest.config.ts'), `import type { Config } from 'jest';
+
+const config: Config = {
+  moduleFileExtensions: ['js', 'json', 'ts'],
+  rootDir: '.',
+  testRegex: '.*\\\\.spec\\\\.ts$',
+  transform: { '^.+\\\\.(t|j)s$': 'ts-jest' },
+  testEnvironment: 'node',
+};
+
+export default config;
+`);
   writeFileSync(join(root, 'src/main.ts'), 'export {};\n');
   writeFileSync(join(root, 'src/app.module.ts'), 'export {};\n');
   writeFileSync(join(root, '.gitignore'), '# Nest defaults\n/dist\n/node_modules\n\n# project rule\n.local-cache/\n');
@@ -86,7 +124,7 @@ function verifyGeneratedApplication(name: string, initArgs: string[]): void {
     run(root, 'pnpm', ['install', '--lockfile-only']);
     run(root, 'pnpm', ['install', '--frozen-lockfile']);
     run(root, 'pnpm', ['format']);
-    run(root, 'pnpm', ['exec', 'prettier', '--check', '.', '--ignore-unknown']);
+    run(root, 'pnpm', ['exec', 'prettier', '--check', 'src/**/*.ts', 'test/**/*.ts']);
     for (const script of ['build', 'lint', 'test', 'test:e2e']) {
       run(root, 'pnpm', [script]);
     }
