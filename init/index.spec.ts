@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
-import { addPresets, approvePnpmBuilds, applyPlan, buildPlan, initialize, preflight } from './index.js';
+import { addPresets, approvePnpmBuilds, applyPlan, buildPlan, ensureGitignore, initialize, preflight } from './index.js';
 
 function project(): string {
   const root = mkdtempSync(join(tmpdir(), 'nest-cqrs-init-'));
@@ -15,6 +15,67 @@ function project(): string {
 }
 
 describe('init foundation', () => {
+  describe('.gitignore preservation', () => {
+    const entries = ['.env', '.env.development', '.env.staging', '.env.production', '.nest-cqrs.pending.json'];
+
+    it('preserves a realistic NestJS file byte-for-byte before one appended block', () => {
+      const root = project();
+      const original = ['# compiled output', '/dist', '/node_modules', '', '# IDEs and editors', '/.idea', '.project', '', '# misc', '.DS_Store', 'npm-debug.log*', '!example.env', ''].join('\n');
+      writeFileSync(join(root, '.gitignore'), original);
+
+      expect(ensureGitignore(root)).toBe(true);
+
+      const updated = readFileSync(join(root, '.gitignore'), 'utf8');
+      expect(updated.slice(0, original.length)).toBe(original);
+      expect(updated.slice(original.length)).toBe(`\n${entries.join('\n')}\n`);
+    });
+
+    it('reports an append for an existing file instead of an update', () => {
+      const root = project();
+      writeFileSync(join(root, '.gitignore'), '/dist\n');
+
+      const operations = applyPlan(root, buildPlan(root, '0.1.0'), true);
+
+      expect(operations).toContain('APPEND .gitignore');
+      expect(operations).not.toContain('UPDATE .gitignore');
+      expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe('/dist\n');
+    });
+
+    it('appends only missing active entries and does not count comments', () => {
+      const root = project();
+      const original = '# .env\n.env.development\n.env.production\n';
+      writeFileSync(join(root, '.gitignore'), original);
+
+      ensureGitignore(root);
+
+      expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(
+        `${original}\n.env\n.env.staging\n.nest-cqrs.pending.json\n`,
+      );
+    });
+
+    it.each([
+      ['with a trailing newline', 'dist/\n', 'dist/\n\n'],
+      ['without a trailing newline', 'dist/', 'dist/\n\n'],
+    ])('handles files %s and is byte-idempotent', (_label, original, prefix) => {
+      const root = project();
+      writeFileSync(join(root, '.gitignore'), original);
+      ensureGitignore(root);
+      const once = readFileSync(join(root, '.gitignore'));
+      expect(once.toString('utf8')).toBe(`${prefix}${entries.join('\n')}\n`);
+      expect(ensureGitignore(root)).toBe(false);
+      expect(readFileSync(join(root, '.gitignore'))).toEqual(once);
+    });
+
+    it('creates an absent file and leaves a complete file unchanged', () => {
+      const root = project();
+      expect(ensureGitignore(root)).toBe(true);
+      const once = readFileSync(join(root, '.gitignore'));
+      expect(once.toString('utf8')).toBe(`${entries.join('\n')}\n`);
+      expect(ensureGitignore(root)).toBe(false);
+      expect(readFileSync(join(root, '.gitignore'))).toEqual(once);
+    });
+  });
+
   it('generates the complete canonical AI guidance hierarchy for the default foundation', () => {
     const plan = buildPlan(project(), '0.1.0');
     const guidancePaths = Object.keys(plan.generated).filter((path) => path === 'AGENTS.md' || path.startsWith('agents/'));
@@ -364,6 +425,19 @@ describe('init foundation', () => {
     expect(existsSync(join(root, 'agents/knowledge/INDEX.md'))).toBe(true);
   });
 
+  it('preserves project-owned .gitignore content through init and add', async () => {
+    const root = project();
+    const original = '# NestJS\n/dist\n/node_modules\n!node_modules/example\n';
+    writeFileSync(join(root, '.gitignore'), original);
+    await initialize({ root, packageVersion: '0.1.0', dryRun: false, resume: false, skipInstall: true, runFeature: () => undefined });
+    const afterInit = readFileSync(join(root, '.gitignore'), 'utf8');
+    expect(afterInit.startsWith(original)).toBe(true);
+
+    await addPresets({ root, names: ['rate-limit'], dryRun: false, skipInstall: true });
+
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(afterInit);
+  });
+
   it('formats the full project after installation and feature generation', async () => {
     const root = project();
     const order: string[] = [];
@@ -443,6 +517,8 @@ describe('init foundation', () => {
 
   it('keeps recovery metadata after an install failure and resumes safely', async () => {
     const root = project();
+    const originalGitignore = '# user rules\n/dist\n';
+    writeFileSync(join(root, '.gitignore'), originalGitignore);
     await expect(initialize({
       root,
       packageVersion: '0.1.0',
@@ -455,6 +531,10 @@ describe('init foundation', () => {
     expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(true);
     expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(false);
     const guidanceBeforeResume = readFileSync(join(root, 'agents/ARCHITECTURE.md'), 'utf8');
+    const afterFailure = readFileSync(join(root, '.gitignore'), 'utf8');
+    expect(afterFailure.startsWith(originalGitignore)).toBe(true);
+    writeFileSync(join(root, '.gitignore'), `${afterFailure}# added while pending\n`);
+    const beforeResume = readFileSync(join(root, '.gitignore'), 'utf8');
 
     await initialize({
       root,
@@ -469,6 +549,7 @@ describe('init foundation', () => {
     expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(false);
     expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(true);
     expect(readFileSync(join(root, 'agents/ARCHITECTURE.md'), 'utf8')).toBe(guidanceBeforeResume);
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(beforeResume);
   });
 
   it('approves ignored pnpm builds, checkpoints allowBuilds, then resumes successfully', async () => {

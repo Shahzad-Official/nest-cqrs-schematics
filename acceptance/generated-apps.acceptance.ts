@@ -56,6 +56,7 @@ function createNestProject(name: string): string {
   writeFileSync(join(root, 'tsconfig.build.json'), `${JSON.stringify({ extends: './tsconfig.json', exclude: ['node_modules', 'test', 'dist', '**/*spec.ts'] }, null, 2)}\n`);
   writeFileSync(join(root, 'src/main.ts'), 'export {};\n');
   writeFileSync(join(root, 'src/app.module.ts'), 'export {};\n');
+  writeFileSync(join(root, '.gitignore'), '# Nest defaults\n/dist\n/node_modules\n\n# project rule\n.local-cache/\n');
   return root;
 }
 
@@ -68,11 +69,12 @@ function run(root: string, command: string, args: string[]): void {
       stdio: 'pipe',
     });
   } catch (error) {
-    const failure = error as { stdout?: string; stderr?: string };
+    const failure = error as Error & { stdout?: string | Buffer; stderr?: string | Buffer };
     throw new Error([
       `Command failed in ${root}: ${command} ${args.join(' ')}`,
-      failure.stdout,
-      failure.stderr,
+      failure.message,
+      failure.stdout?.toString(),
+      failure.stderr?.toString(),
     ].filter(Boolean).join('\n'));
   }
 }
@@ -89,6 +91,9 @@ function verifyGeneratedApplication(name: string, initArgs: string[]): void {
       run(root, 'pnpm', [script]);
     }
     expect(readFileSync(join(root, '.nest-cqrs.json'), 'utf8')).toContain('"status": "complete"');
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(
+      '# Nest defaults\n/dist\n/node_modules\n\n# project rule\n.local-cache/\n\n.env\n.env.development\n.env.staging\n.env.production\n.nest-cqrs.pending.json\n',
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

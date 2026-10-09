@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { devDependencies, files, FOUNDATION_VERSION, removableDefaultFiles, runtimeDependencies } from './foundation.js';
 import { GUIDANCE_FOUNDATION_VERSION, managedBlocks, renderGuidanceFiles, replaceManagedBlock } from './guidance.js';
@@ -8,7 +8,33 @@ import { applyPresets, PRESET_VERSION, presetNames } from './presets.js';
 
 const manifestPath = '.nest-cqrs.json';
 const pendingPath = '.nest-cqrs.pending.json';
+const gitignoreEntries = ['.env', '.env.development', '.env.staging', '.env.production', pendingPath];
 const hash = (value) => createHash('sha256').update(value).digest('hex');
+
+function gitignoreAppend(root) {
+  const path = resolve(root, '.gitignore');
+  if (!existsSync(path)) return `${gitignoreEntries.join('\n')}\n`;
+
+  const existing = readFileSync(path);
+  const text = existing.toString('utf8');
+  const activeLines = new Set(text.split(/\r\n|\n|\r/));
+  const missing = gitignoreEntries.filter((entry) => !activeLines.has(entry));
+  if (!missing.length) return '';
+
+  const newline = text.includes('\r\n') ? '\r\n' : '\n';
+  if (!existing.length) return `${missing.join(newline)}${newline}`;
+  const hasTrailingNewline = text.endsWith('\n') || text.endsWith('\r');
+  const hasBlankLine = text.endsWith('\n\n') || text.endsWith('\r\n\r\n') || text.endsWith('\r\r');
+  const separator = hasBlankLine ? '' : hasTrailingNewline ? newline : `${newline}${newline}`;
+  return `${separator}${missing.join(newline)}${newline}`;
+}
+
+export function ensureGitignore(root, dryRun = false) {
+  const addition = gitignoreAppend(root);
+  if (!addition) return false;
+  if (!dryRun) appendFileSync(resolve(root, '.gitignore'), addition);
+  return true;
+}
 
 export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = [], databaseOptions = {}) {
   const packagePath = resolve(root, 'package.json');
@@ -68,15 +94,6 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
   delete tsconfig.compilerOptions.baseUrl;
   generated['tsconfig.json'] = `${JSON.stringify(tsconfig, null, 2)}\n`;
 
-  const gitignorePath = resolve(root, '.gitignore');
-  const gitignore = existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf8') : '';
-  const additions = ['.env', '.env.development', '.env.staging', '.env.production', '.nest-cqrs.pending.json'];
-  const gitignoreLines = gitignore.trimEnd().split(/\r?\n/).filter(Boolean);
-  for (const addition of additions) {
-    if (!gitignoreLines.includes(addition)) gitignoreLines.push(addition);
-  }
-  generated['.gitignore'] = `${gitignoreLines.join('\n')}\n`;
-
   const manifest = {
     manifestVersion: 1,
     generator: { name: '@retail-pos/schematics', version: packageVersion },
@@ -114,7 +131,6 @@ export function applyPlan(root, plan, dryRun) {
     'package.json',
     'nest-cli.json',
     'tsconfig.json',
-    '.gitignore',
     'vitest.config.ts',
     'vitest.config.e2e.ts',
     'test/app.e2e-spec.ts',
@@ -136,6 +152,10 @@ export function applyPlan(root, plan, dryRun) {
       mkdirSync(dirname(absolute), { recursive: true });
       writeFileSync(absolute, content);
     }
+  }
+  const gitignoreExisted = existsSync(resolve(root, '.gitignore'));
+  if (ensureGitignore(root, dryRun)) {
+    operations.push(`${gitignoreExisted ? 'APPEND' : 'CREATE'} .gitignore`);
   }
   for (const path of removableDefaultFiles.filter((item) => item !== 'test/app.e2e-spec.ts')) {
     const absolute = resolve(root, path);
@@ -262,6 +282,8 @@ export async function initialize({ root, packageVersion, dryRun, resume, skipIns
   const operations = resume ? [] : applyPlan(root, plan, dryRun);
   if (dryRun) return { operations, complete: false };
 
+  if (resume) ensureGitignore(root);
+
   if (!resume) writeFileSync(resolve(root, pendingPath), `${JSON.stringify({
     manifestVersion: 1,
     foundationVersion: FOUNDATION_VERSION,
@@ -360,6 +382,10 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     if (!dryRun) { mkdirSync(dirname(absolute), { recursive: true }); writeFileSync(absolute, content); }
     return `${existed ? 'UPDATE' : 'CREATE'} ${path}`;
   });
+  const gitignoreExisted = existsSync(resolve(root, '.gitignore'));
+  if (ensureGitignore(root, dryRun)) {
+    operations.push(`${gitignoreExisted ? 'APPEND' : 'CREATE'} .gitignore`);
+  }
   if (dryRun) return { operations, complete: false };
   if (!skipInstall) {
     const packageManager = detectPackageManager(root);
