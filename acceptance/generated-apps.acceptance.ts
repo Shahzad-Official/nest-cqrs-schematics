@@ -154,9 +154,16 @@ function verifyGeneratedApplication(name: string, initArgs: string[], esm = fals
     run(root, 'pnpm', ['install', '--frozen-lockfile']);
     run(root, 'pnpm', ['exec', 'prettier', '--write', 'src/**/*.ts']);
     run(root, 'pnpm', ['exec', 'prettier', '--check', 'src/**/*.ts']);
-    for (const script of ['build', 'lint']) {
+    for (const script of ['build', 'lint', 'test']) {
       run(root, 'pnpm', [script]);
     }
+    const logging = readFileSync(join(root, 'src/common/logging/http-logger.options.ts'), 'utf8');
+    expect(logging).toMatch(/if \(response\.statusCode >= 400\) return ["']warn["']/);
+    expect(logging).toMatch(/return ["']silent["']/);
+    expect(logging).toMatch(/customErrorMessage: \(\) => ["']HTTP request failed["']/);
+    expect(logging).toMatch(
+      /redact: \[["']req\.headers\.authorization["'], ["']req\.headers\.cookie["']\]/,
+    );
     expect(existsSync(join(root, 'src/health/health.controller.spec.ts'))).toBe(false);
     expect(existsSync(join(root, 'test/app.e2e-spec.ts'))).toBe(false);
     expect(existsSync(join(root, 'test/database.integration-spec.ts'))).toBe(false);

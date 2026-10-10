@@ -88,6 +88,7 @@ import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { httpLoggerOptions } from './common/logging/http-logger.options';
 import { configuration } from './config/configuration';
 import { envFilePath } from './config/env-file-path';
 import { EnvConfig } from './config/env.config.types';
@@ -106,12 +107,12 @@ import { HealthModule } from './health/health.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvConfig, true>) => ({
         pinoHttp: {
+          ...httpLoggerOptions,
           level: config.getOrThrow('logLevel', { infer: true }),
           transport:
             config.getOrThrow('env', { infer: true }) === 'development'
               ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
               : undefined,
-          redact: ['req.headers.authorization', 'req.headers.cookie'],
         },
       }),
     }),
@@ -209,9 +210,56 @@ export class ApiErrorResponse {
   message!: string;
 }
 `,
+  'src/common/logging/http-logger.options.ts': `import type { Options } from 'pino-http';
+
+export const httpLoggerOptions: Options = {
+  customLogLevel(_request, response, error) {
+    if (response.statusCode >= 500 || error) return 'error';
+    if (response.statusCode >= 400) return 'warn';
+    return 'silent';
+  },
+  customSuccessMessage: (_request, response) =>
+    response.statusCode >= 500
+      ? 'HTTP request completed with server error'
+      : response.statusCode >= 400
+        ? 'HTTP request completed with client error'
+        : 'HTTP request completed',
+  customErrorMessage: () => 'HTTP request failed',
+  redact: ['req.headers.authorization', 'req.headers.cookie'],
+};
+`,
+  'src/common/logging/http-logger.options.spec.ts': `import { httpLoggerOptions } from './http-logger.options';
+
+describe('httpLoggerOptions', () => {
+  it.each([
+    [200, undefined, 'silent'],
+    [302, undefined, 'silent'],
+    [400, undefined, 'warn'],
+    [404, undefined, 'warn'],
+    [429, undefined, 'warn'],
+    [500, undefined, 'error'],
+    [200, new Error('unexpected'), 'error'],
+  ] as const)('maps status %s to %s request logging', (statusCode, error, level) => {
+    expect(httpLoggerOptions.customLogLevel({}, { statusCode }, error)).toBe(level);
+  });
+
+  it.each([
+    [200, 'HTTP request completed'],
+    [404, 'HTTP request completed with client error'],
+    [500, 'HTTP request completed with server error'],
+  ] as const)('uses the completion message for status %s', (statusCode, message) => {
+    expect(httpLoggerOptions.customSuccessMessage({}, { statusCode })).toBe(message);
+  });
+
+  it('uses a failure message for request errors', () => {
+    expect(httpLoggerOptions.customErrorMessage({}, {}, new Error('unexpected'))).toBe(
+      'HTTP request failed',
+    );
+  });
+});
+`,
   'src/common/filters/global-exception.filter.ts': `import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { Logger } from 'nestjs-pino';
 import { ApiErrorResponse } from '../interfaces/api-response.interface';
 
 interface HttpErrorBody { error?: string; message?: string | string[] }
@@ -219,8 +267,6 @@ interface HttpErrorBody { error?: string; message?: string | string[] }
 @Catch()
 @Injectable()
 export class GlobalExceptionFilter implements ExceptionFilter {
-  constructor(private readonly logger: Logger) {}
-
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const request = http.getRequest<FastifyRequest>();
@@ -232,13 +278,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       exception instanceof HttpException ? exception.getResponse() : undefined,
       statusCode,
     );
-
-    if (statusCode >= 500) {
-      this.logger.error(
-        { err: exception, method: request.method, path: request.url.split('?')[0] },
-        'Unhandled request exception',
-      );
-    }
 
     const payload: ApiErrorResponse = {
       success: false,
