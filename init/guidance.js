@@ -1,6 +1,6 @@
 import { strings } from '@angular-devkit/core';
 
-export const GUIDANCE_FOUNDATION_VERSION = 6;
+export const GUIDANCE_FOUNDATION_VERSION = 7;
 
 export const managedBlocks = {
   'AGENTS.md': 'commands',
@@ -63,7 +63,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
       '- Validated runtime database types are `postgres`, `mysql`, and `mongodb`.',
       '- Database host, port, credentials, name, and TLS/SSL behavior come from the validated configuration layer.',
       '- The readiness endpoint includes a TypeORM database check; liveness remains independent of the database.',
-      '- Fast E2E tests use test-mode manual initialization; real database checks run separately through `test:integration` with explicit connection variables.',
+      '- Database tests must use explicit test configuration and must not connect to shared or production databases.',
       '',
     );
   }
@@ -138,7 +138,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
       ? [
           `- \`src/features/${strings.dasherize(dummyFeature)}/\` is the generated CQRS starter feature.`,
           '- It is an illustrative CQRS scaffold whose placeholder handlers are not production functionality.',
-          '- It contains the generated module, controller, DTOs, entity, commands, queries, handlers, and enabled handler tests.',
+          '- It contains the generated module, controller, DTOs, entity, commands, queries, and handlers. Tests are intentionally left for deliberate implementation.',
         ]
       : ['No dummy CQRS feature was requested during initialization.']),
   ].join('\n');
@@ -177,30 +177,17 @@ function codebaseMapBlock({ selectedPresets, dummyFeature, testRunner }) {
       '',
     );
   }
-  if (selected.has('database')) {
-    lines.push(
-      '## Database integration tests',
-      '',
-      '- `test/database.integration-spec.ts` — explicit real-database readiness test.',
-      '- `test/setup-integration-env.ts` — requires opt-in and explicit database connection variables.',
-      testRunner === 'vitest'
-        ? '- `vitest.config.integration.ts` — isolated database integration-test configuration.'
-        : '- `test/jest-integration.json` — isolated database integration-test configuration.',
-      '',
-    );
-  }
   if (dummyFeature) {
     lines.push(
       '## Generated features',
       '',
-      `- \`src/features/${strings.dasherize(dummyFeature)}/\` — generated CQRS feature containing its module, controller, DTOs, entity, commands, queries, handlers, and enabled tests.`,
+      `- \`src/features/${strings.dasherize(dummyFeature)}/\` — generated CQRS feature containing its module, controller, DTOs, entity, commands, queries, and handlers.`,
       '',
     );
   }
   lines.push(
     '## Tests and tooling',
     '',
-    '- `test/app.e2e-spec.ts` — generated application E2E health test.',
     `- Nest CLI's existing ${testRunner === 'vitest' ? 'Vitest' : 'Jest'} configuration — unit-test configuration.`,
     testRunner === 'vitest'
       ? '- `vitest.config.e2e.ts` — Nest CLI\'s E2E-test configuration.'
@@ -211,12 +198,47 @@ function codebaseMapBlock({ selectedPresets, dummyFeature, testRunner }) {
   return lines.join('\n');
 }
 
+function testingGuide(packageJson, esm) {
+  const runner = packageJson.devDependencies?.vitest || packageJson.dependencies?.vitest
+    ? 'Vitest'
+    : 'Jest';
+  const mock = runner === 'Vitest' ? 'vi' : 'jest';
+  return markdown([
+    '# Testing Guide',
+    '',
+    `This project uses ${runner}. Preserve its existing scripts, dependencies, and configuration.`,
+    '',
+    '## Before writing tests',
+    '',
+    '- Inspect `package.json`, `tsconfig.json`, and the existing test-runner configuration before adding a test.',
+    '- Do not install, replace, or reconfigure a test framework unless the user explicitly requests it.',
+    `- Use \`${mock}\` for spies, mocks, and fake timers. Do not mix Jest and Vitest APIs.`,
+    `- Use ${esm ? '`.js` suffixes for relative imports because this is an ESM project' : 'extensionless relative imports because this is a CommonJS project'}.`,
+    '- Confirm the configured test filename patterns and place tests where the existing runner will discover them.',
+    '',
+    '## Test design',
+    '',
+    '- Test observable behavior and business rules, not framework implementation details.',
+    '- Keep unit tests deterministic and isolate network, filesystem, clock, database, and external-service boundaries.',
+    '- For CQRS handlers, cover successful behavior, validation or domain failures, and important collaborator interactions.',
+    '- For controllers, test request/response behavior only when it adds value beyond handler tests.',
+    '- Add E2E tests only for important application boundaries and use the application\'s existing adapter and bootstrap conventions.',
+    '- Database integration tests require isolated disposable data and explicit test-only connection settings. Never infer or reuse development/production credentials.',
+    '',
+    '## Verification',
+    '',
+    '- Run the narrowest relevant test command first, then the project test command.',
+    '- Run build and lint when imports, TypeScript settings, decorators, or application wiring are involved.',
+    '- If the existing runner cannot load the project module format, report the configuration mismatch; do not silently rewrite project tooling.',
+  ]);
+}
+
 function withManagedBlock(name, content) {
   const { start, end } = managedMarkers(name);
   return `${start}\n${content}\n${end}`;
 }
 
-export function renderGuidanceFiles({ packageManager, packageJson, selectedPresets = [], databaseType, dummyFeature }) {
+export function renderGuidanceFiles({ packageManager, packageJson, selectedPresets = [], databaseType, dummyFeature, esm = packageJson.type === 'module' }) {
   const testRunner = packageJson.devDependencies?.vitest || packageJson.dependencies?.vitest
     ? 'vitest'
     : 'jest';
@@ -236,6 +258,7 @@ export function renderGuidanceFiles({ packageManager, packageJson, selectedPrese
       '- Consult [`agents/ARCHITECTURE.md`](agents/ARCHITECTURE.md) before changing application boundaries, infrastructure, configuration, or integrations.',
       '- Consult [`agents/PROJECT_CONTEXT.md`](agents/PROJECT_CONTEXT.md) when behavior depends on product, domain, business-rule, user, or role knowledge.',
       '- Consult [`agents/CODEBASE_MAP.md`](agents/CODEBASE_MAP.md) when locating entry points or changing project structure.',
+      '- Consult [`agents/TESTING.md`](agents/TESTING.md) before creating or changing tests.',
       '- Consult [`agents/knowledge/INDEX.md`](agents/knowledge/INDEX.md) for durable feature or topic knowledge.',
       '- Read [`agents/README.md`](agents/README.md) when maintaining these references.',
       '',
@@ -246,7 +269,7 @@ export function renderGuidanceFiles({ packageManager, packageJson, selectedPrese
       '- Read environment values through the typed, Joi-validated configuration layer. Do not introduce scattered direct environment access in application code.',
       '- Preserve DTO validation, the global validation pipe, response interception, exception handling, and structured Pino logging conventions.',
       '- Do not log credentials, tokens, connection strings, or other secrets.',
-      `- Add or update proportionate ${testRunner === 'vitest' ? 'Vitest' : 'Jest'} coverage for behavior changes.`,
+      '- Do not generate speculative tests. Add tests only when requested or when confirmed behavior requires coverage, following `agents/TESTING.md`.',
       '- Keep linting, formatting, build, unit tests, and E2E tests passing when relevant to the task.',
       '',
       '## Project commands',
@@ -280,6 +303,7 @@ export function renderGuidanceFiles({ packageManager, packageJson, selectedPrese
       '- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — verified generated foundation and selected integrations. Its marked generated block is maintained by `nest-cqrs add`.',
       '- [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md) — verified product and domain context maintained by project contributors. Its product sections begin incomplete.',
       '- [`CODEBASE_MAP.md`](./CODEBASE_MAP.md) — important entry points and structural navigation. Its marked generated block is maintained by `nest-cqrs add`.',
+      '- [`TESTING.md`](./TESTING.md) — project-specific rules for safely authoring tests with the existing runner and module format.',
       '- [`knowledge/INDEX.md`](./knowledge/INDEX.md) — index and format for future durable feature or topic notes.',
       '',
       '## Ownership',
@@ -356,6 +380,7 @@ export function renderGuidanceFiles({ packageManager, packageJson, selectedPrese
       '',
       'Add important entry points or directories introduced outside the generator. Keep this concise and remove entries when the corresponding structure is removed.',
     ]),
+    'agents/TESTING.md': testingGuide(packageJson, esm),
     'agents/knowledge/INDEX.md': markdown([
       '# Knowledge Index',
       '',

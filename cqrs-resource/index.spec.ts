@@ -26,7 +26,7 @@ describe('cqrs-resource schematic', () => {
     });
     const root = '/src/features/stock-items';
 
-    expect(tree.files).toHaveLength(21);
+    expect(tree.files).toHaveLength(16);
     expect(tree.files).toEqual(
       expect.arrayContaining([
         `${root}/stock-items.module.ts`,
@@ -37,7 +37,6 @@ describe('cqrs-resource schematic', () => {
         `${root}/entities/stock-item.entity.ts`,
         `${root}/commands/create-stock-item/create-stock-item.command.ts`,
         `${root}/commands/create-stock-item/create-stock-item.handler.ts`,
-        `${root}/commands/create-stock-item/create-stock-item.handler.spec.ts`,
         `${root}/commands/update-stock-item/update-stock-item.command.ts`,
         `${root}/commands/delete-stock-item/delete-stock-item.command.ts`,
         `${root}/queries/get-stock-item/get-stock-item.query.ts`,
@@ -65,11 +64,11 @@ describe('cqrs-resource schematic', () => {
     expect(paramsDto).toContain('@IsUUID()');
   });
 
-  it('omits handler specs when tests are disabled', async () => {
+  it('omits handler specs even when the legacy spec option is supplied', async () => {
     const runner = new SchematicTestRunner('cqrs-schematics', collectionPath);
     const tree = await runner.runSchematic('cqrs-resource', {
       name: 'orders',
-      spec: false,
+      spec: true,
     });
 
     expect(tree.files).toHaveLength(16);

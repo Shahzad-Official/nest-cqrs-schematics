@@ -16,14 +16,14 @@ The initializer configures:
 - consistent success and error responses;
 - health checks;
 - Swagger/OpenAPI support controlled by configuration;
-- E2E tests that use the Nest CLI starter's existing Jest or Vitest setup;
-- coding-agent guidance in `AGENTS.md` and `agents/`;
+- coding-agent guidance in `AGENTS.md` and `agents/`, including project-aware testing rules;
 - optional database, migration, and rate-limit integrations.
 
 The initializer preserves the Nest CLI starter's scripts, Jest/Vitest, Oxlint, and Prettier
 dependencies and configuration, TypeScript configuration, and Nest CLI
 configuration. Existing dependency versions are retained; the initializer only
 adds packages required by the generated foundation and selected presets.
+For Fastify Swagger UI, this includes the required `@fastify/static` runtime plugin.
 Generated relative imports follow the existing project module type: ESM projects
 receive `.js` suffixes, while CommonJS projects keep extensionless imports.
 
@@ -269,7 +269,7 @@ The command asks whether to generate a standard Nest resource or a CQRS resource
 Generate a CQRS CRUD feature without prompts:
 
 ```bash
-nest-cqrs orders --structure cqrs --crud --tests
+nest-cqrs orders --structure cqrs --crud
 ```
 
 This creates a feature-first structure under:
@@ -278,7 +278,7 @@ This creates a feature-first structure under:
 src/features/orders/
 ```
 
-It includes the feature module, controller, DTOs, entity, commands, queries, handlers, and optional handler tests. The feature module is registered in the nearest Nest module.
+It includes the feature module, controller, DTOs, entity, commands, queries, and handlers. The feature module is registered in the nearest Nest module. Tests are intentionally not generated; `agents/TESTING.md` guides coding agents when tests are requested later.
 
 This generated feature is an **illustrative CQRS scaffold**. Its handlers return placeholder values to show the request flow; they are not production business logic or a persistence-backed reference implementation.
 
@@ -286,12 +286,6 @@ Generate only the CQRS module and entity:
 
 ```bash
 nest-cqrs orders --structure cqrs --no-crud
-```
-
-Generate without test files:
-
-```bash
-nest-cqrs orders --structure cqrs --no-tests
 ```
 
 To use Nest's standard resource generator instead:
@@ -302,7 +296,7 @@ nest-cqrs orders --structure standard
 
 ## Generated project commands
 
-Initialization adds these scripts to the application:
+Initialization preserves and uses the scripts already supplied by the Nest CLI starter, such as:
 
 ```bash
 pnpm build
@@ -318,7 +312,7 @@ pnpm start:debug
 pnpm start:prod
 ```
 
-The format script runs Prettier across the full project. A normal `init` or `add` operation runs it after dependency installation and generation. Dry runs and operations using `--skip-install` do not run formatting.
+The existing format script is used after dependency installation when test source files remain. When initialization removes the obsolete Nest starter tests and no test sources remain, the initializer runs the existing Prettier executable against `src/**/*.ts` directly so the starter script's unmatched `test/**/*.ts` glob cannot fail. Dry runs and operations using `--skip-install` do not run formatting.
 
 When migrations are enabled, the project also receives:
 
@@ -333,11 +327,7 @@ pnpm migration:run:prod
 
 Replace `pnpm` with `npm run` or `yarn` when using another package manager.
 
-Database-enabled projects also receive a separate `test:integration` command. Fast scaffold E2E tests do not connect to a database. Real database integration tests run only when explicitly requested with `RUN_DATABASE_INTEGRATION=true` and complete `DB_*` connection variables:
-
-```bash
-RUN_DATABASE_INTEGRATION=true pnpm test:integration
-```
+The generator does not create unit, E2E, or database-integration tests and does not add test scripts. The generated `agents/TESTING.md` records the detected runner and module format so an AI agent can add deliberate, compatible tests when requested.
 
 ## Environment configuration
 
@@ -404,7 +394,6 @@ It records the approved build configuration in the recovery checkpoint and retri
 --no-dummy-feature
 --structure <standard|cqrs>
 --crud / --no-crud
---tests / --no-tests
 --dry-run
 --resume
 --skip-install

@@ -24,7 +24,6 @@ export default function cqrsResource(options) {
   const feature = strings.dasherize(options.name.trim());
   const name = singularize(feature);
   const crud = options.crud !== false;
-  const spec = options.spec !== false;
 
   const featurePath = `src/features/${feature}`;
 
@@ -45,9 +44,9 @@ export default function cqrsResource(options) {
                 path.includes('/entities/') || path.endsWith('.module.ts.template')
               );
             }
-            return spec || !path.endsWith('.spec.ts.template');
+            return !path.endsWith('.spec.ts.template');
           }),
-          template({ ...strings, feature, name, crud, spec, swagger }),
+          template({ ...strings, feature, name, crud, spec: false, swagger }),
           renameTemplateFiles(),
           move(featurePath),
         ]),

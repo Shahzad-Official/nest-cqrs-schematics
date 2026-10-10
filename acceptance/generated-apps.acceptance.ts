@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -152,11 +152,15 @@ function verifyGeneratedApplication(name: string, initArgs: string[], esm = fals
     run(root, process.execPath, [cli, 'init', '--skip-install', '--yes', ...initArgs]);
     run(root, 'pnpm', ['install', '--lockfile-only']);
     run(root, 'pnpm', ['install', '--frozen-lockfile']);
-    run(root, 'pnpm', ['format']);
-    run(root, 'pnpm', ['exec', 'prettier', '--check', 'src/**/*.ts', 'test/**/*.ts']);
-    for (const script of ['build', 'lint', 'test', 'test:e2e']) {
+    run(root, 'pnpm', ['exec', 'prettier', '--write', 'src/**/*.ts']);
+    run(root, 'pnpm', ['exec', 'prettier', '--check', 'src/**/*.ts']);
+    for (const script of ['build', 'lint']) {
       run(root, 'pnpm', [script]);
     }
+    expect(existsSync(join(root, 'src/health/health.controller.spec.ts'))).toBe(false);
+    expect(existsSync(join(root, 'test/app.e2e-spec.ts'))).toBe(false);
+    expect(existsSync(join(root, 'test/database.integration-spec.ts'))).toBe(false);
+    expect(existsSync(join(root, 'test/rate-limit.e2e-spec.ts'))).toBe(false);
     expect(readFileSync(join(root, '.nest-cqrs.json'), 'utf8')).toContain('"status": "complete"');
     expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(
       '# Nest defaults\n/dist\n/node_modules\n\n# project rule\n.local-cache/\n\n.env\n.env.development\n.env.staging\n.env.production\n.nest-cqrs.pending.json\n',

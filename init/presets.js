@@ -14,7 +14,7 @@ const addProvider = (source, expression) => source.includes(`{ provide: APP_GUAR
   `    { provide: APP_GUARD, useClass: ${expression} },\n    { provide: APP_FILTER, useClass: GlobalExceptionFilter },`,
 );
 
-export function applyPresets({ files, packageJson, selected, databaseType, migrations = false, testRunner = 'jest' }) {
+export function applyPresets({ files, packageJson, selected, databaseType, migrations = false }) {
   const enabled = new Set(selected);
   for (const name of enabled) {
     if (!presetNames.includes(name)) throw new Error(`Unknown preset: ${name}`);
@@ -22,7 +22,7 @@ export function applyPresets({ files, packageJson, selected, databaseType, migra
   if (enabled.has('database')) {
     if (!dependencies[databaseType]) throw new Error(`Choose a database: ${databaseTypes.join(', ')}`);
     if ((migrations || enabled.has('migrations')) && databaseType === 'mongodb') throw new Error('TypeORM schema migrations are not generated for MongoDB; use custom data-migration logic.');
-    applyDatabase(files, packageJson, databaseType, testRunner);
+    applyDatabase(files, packageJson, databaseType);
   }
   if (enabled.has('migrations') && !enabled.has('database')) {
     if (!databaseTypes.includes(databaseType)) throw new Error('Add a supported database before adding migrations.');
@@ -36,51 +36,16 @@ export function applyPresets({ files, packageJson, selected, databaseType, migra
     app = app.replace('import { APP_FILTER, APP_INTERCEPTOR }', 'import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR }');
     app = addModuleImport(app, 'ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }])');
     files['src/app.module.ts'] = addProvider(app, 'ThrottlerGuard');
-    files['test/rate-limit.e2e-spec.ts'] ??= `import './setup-env';
-import { Test } from '@nestjs/testing';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import request from 'supertest';
-import { AppModule } from '../src/app.module';
-
-describe('rate limiting (e2e)', () => {
-  let app: NestFastifyApplication;
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication(new FastifyAdapter());
-    app.setGlobalPrefix('api');
-    await app.init();
-    await app.getHttpAdapter().getInstance().ready();
-  });
-  afterAll(() => app.close());
-
-  it('allows the configured limit and rejects the next request', async () => {
-    for (let requestNumber = 0; requestNumber < 100; requestNumber += 1) {
-      await request(app.getHttpServer()).get('/api/health/live').expect(200);
-    }
-    await request(app.getHttpServer()).get('/api/health/live').expect(429);
-  });
-});
-`;
   }
   return [...enabled];
 }
 
-function applyDatabase(files, packageJson, databaseType, testRunner) {
+function applyDatabase(files, packageJson, databaseType) {
   packageJson.dependencies = {
     '@nestjs/typeorm': '^12.0.0',
     ...dependencies[databaseType],
     ...packageJson.dependencies,
   };
-  packageJson.scripts = {
-    ...packageJson.scripts,
-    'test:integration': testRunner === 'vitest'
-      ? 'vitest run --config ./vitest.config.integration.ts'
-      : 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-integration.json',
-  };
-  files['test/setup-env.ts'] = files['test/setup-env.ts'].replace(
-    "DB_TYPE: 'postgres'",
-    `DB_TYPE: '${databaseType}'`,
-  );
 
   const typeormOptions = `const common = { host: db.host, port: db.port, username: db.username, password: db.password, database: db.database, autoLoadEntities: true, synchronize: false, manualInitialization: config.getOrThrow('env', { infer: true }) === 'test' };
         return db.type === 'mongodb'
@@ -152,77 +117,6 @@ export class HealthController {
     return this.health.check([() => this.db.pingCheck('database', { timeout: 1000 })]);
   }
 }
-`;
-  delete files['src/health/health.controller.spec.ts'];
-  files['test/app.e2e-spec.ts'] = files['test/app.e2e-spec.ts'].replace(
-    "  it('GET /api/health/ready', () => request(app.getHttpServer()).get('/api/health/ready').expect(200));\n",
-    '',
-  );
-  files['test/app.e2e-spec.ts'] = files['test/app.e2e-spec.ts'].replace(
-    "import { AppModule } from '../src/app.module';",
-    "import { DataSource } from 'typeorm';\nimport { getDataSourceToken } from '@nestjs/typeorm';\nimport { AppModule } from '../src/app.module';",
-  ).replace(
-    "    await app.getHttpAdapter().getInstance().ready();",
-    "    await app.getHttpAdapter().getInstance().ready();\n    expect(app.get<DataSource>(getDataSourceToken()).isInitialized).toBe(false);",
-  );
-  if (testRunner === 'vitest') {
-    files['vitest.config.integration.ts'] ??= `import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
-
-export default defineConfig({
-  plugins: [tsconfigPaths()],
-  test: {
-    globals: true,
-    root: './',
-    include: ['test/**/*.integration-spec.ts'],
-  },
-});
-`;
-  } else {
-    files['test/jest-integration.json'] ??= `${JSON.stringify({
-      moduleFileExtensions: ['js', 'json', 'ts'],
-      rootDir: '..',
-      testEnvironment: 'node',
-      testRegex: '.integration-spec.ts$',
-      transform: { '^.+\\.(t|j)s$': 'ts-jest' },
-    }, null, 2)}\n`;
-  }
-  files['test/setup-integration-env.ts'] ??= `if (process.env.RUN_DATABASE_INTEGRATION !== 'true') {
-  throw new Error('Set RUN_DATABASE_INTEGRATION=true and explicit DB_* variables to run database integration tests.');
-}
-
-const required = ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_NAME', 'DB_SSL'] as const;
-const missing = required.filter((name) => process.env[name] === undefined);
-if (missing.length) throw new Error(\`Missing database integration variables: \${missing.join(', ')}\`);
-
-Object.assign(process.env, {
-  NODE_ENV: 'development',
-  PORT: '3000',
-  API_PREFIX: 'api',
-  SWAGGER_ENABLED: 'false',
-  LOG_LEVEL: 'error',
-  CORS_ENABLED: 'false',
-  CORS_ORIGINS: '',
-});
-`;
-  files['test/database.integration-spec.ts'] ??= `import './setup-integration-env';
-import { Test } from '@nestjs/testing';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import request from 'supertest';
-import { AppModule } from '../src/app.module';
-
-describe('database readiness (integration)', () => {
-  let app: NestFastifyApplication;
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication(new FastifyAdapter());
-    app.setGlobalPrefix('api');
-    await app.init();
-    await app.getHttpAdapter().getInstance().ready();
-  });
-  afterAll(() => app.close());
-  it('GET /api/health/ready', () => request(app.getHttpServer()).get('/api/health/ready').expect(200));
-});
 `;
   addDatabaseEnvironment(files, databaseType);
 }

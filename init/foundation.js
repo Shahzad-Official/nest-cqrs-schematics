@@ -3,6 +3,7 @@ import { GUIDANCE_FOUNDATION_VERSION } from './guidance.js';
 export const FOUNDATION_VERSION = GUIDANCE_FOUNDATION_VERSION;
 
 export const runtimeDependencies = {
+  '@fastify/static': '^10.0.0',
   '@nestjs/config': '^12.0.0',
   '@nestjs/cqrs': '^12.0.0',
   '@nestjs/platform-fastify': '^12.0.0',
@@ -525,3 +526,11 @@ export const removableDefaultFiles = [
   'src/app.controller.spec.ts',
   'test/app.e2e-spec.ts',
 ];
+
+// Tests are intentionally authored later against confirmed project behavior
+// and the application's existing test runner/configuration.
+for (const path of [
+  'src/health/health.controller.spec.ts',
+  'test/setup-env.ts',
+  'test/app.e2e-spec.ts',
+]) delete files[path];

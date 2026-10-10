@@ -18,11 +18,6 @@
       "type": "boolean",
       "description": "Generate CRUD endpoints.",
       "default": true
-    },
-    "spec": {
-      "type": "boolean",
-      "description": "Generate handler unit tests.",
-      "default": true
     }
   },
   "required": ["name"]

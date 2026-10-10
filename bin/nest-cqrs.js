@@ -25,7 +25,6 @@ Generate a resource, or initialize the preferred Nest application foundation.
 Options:
   --structure <standard|cqrs>  Skip the structure prompt
   --crud / --no-crud          Enable or disable CRUD endpoints
-  --tests / --no-tests        Enable or disable unit tests
   --dry-run                   Preview without writing files
   --dummy-feature <name>      With init, generate a CQRS feature after setup
   --no-dummy-feature          With init, skip the optional feature
@@ -42,7 +41,6 @@ function parseArgs(argv) {
     name: undefined,
     structure: undefined,
     crud: undefined,
-    tests: undefined,
     dryRun: false,
     resume: false,
     dummyFeature: undefined,
@@ -67,8 +65,6 @@ function parseArgs(argv) {
     else if (argument === '--dummy-feature') result.dummyFeature = argv[++index];
     else if (argument === '--crud') result.crud = true;
     else if (argument === '--no-crud') result.crud = false;
-    else if (argument === '--tests') result.tests = true;
-    else if (argument === '--no-tests') result.tests = false;
     else if (argument === '--migrations') result.migrations = true;
     else if (argument === '--no-migrations') result.migrations = false;
     else if (argument.startsWith('--database=')) result.databaseType = argument.slice('--database='.length);
@@ -188,12 +184,6 @@ async function askMissing(options) {
         .toLowerCase();
       options.crud = answer !== 'n' && answer !== 'no';
     }
-    if (options.tests === undefined) {
-      const answer = (await prompt.question('Generate unit tests? [Y/n]: '))
-        .trim()
-        .toLowerCase();
-      options.tests = answer !== 'n' && answer !== 'no';
-    }
   } finally {
     prompt.close();
   }
@@ -222,7 +212,7 @@ function runStandard(options) {
     'resource',
     options.name,
     `--crud=${options.crud}`,
-    options.tests ? '--spec' : '--no-spec',
+    '--no-spec',
   ];
   if (options.dryRun) args.push('--dry-run');
   const result = spawnSync('pnpm', args, {
@@ -261,7 +251,7 @@ async function runCqrs(options) {
         options: {
           name: options.name,
           crud: options.crud,
-          spec: options.tests,
+          spec: false,
         },
       })
       .subscribe({ complete: resolveExecution, error: rejectExecution });
@@ -282,7 +272,7 @@ async function runInit(options) {
     dummyFeature: options.dummyFeature,
     selectedPresets: options.selectedPresets,
     databaseOptions: { type: options.databaseType, migrations: options.migrations },
-    runFeature: (name) => runCqrs({ name, crud: true, tests: true, dryRun: false }),
+    runFeature: (name) => runCqrs({ name, crud: true, dryRun: false }),
   });
   for (const operation of result.operations) console.log(operation);
   if (options.dryRun) console.log('Dry run enabled. No files written.');

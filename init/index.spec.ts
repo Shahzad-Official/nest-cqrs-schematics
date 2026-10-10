@@ -96,6 +96,7 @@ describe('init foundation', () => {
       'agents/CODEBASE_MAP.md',
       'agents/PROJECT_CONTEXT.md',
       'agents/README.md',
+      'agents/TESTING.md',
       'agents/knowledge/INDEX.md',
     ]);
     expect(Object.keys(plan.generated).some((path) => path.startsWith('docs/'))).toBe(false);
@@ -108,6 +109,7 @@ describe('init foundation', () => {
     expect(agents).toContain('agents/ARCHITECTURE.md');
     expect(agents).toContain('agents/PROJECT_CONTEXT.md');
     expect(agents).toContain('agents/CODEBASE_MAP.md');
+    expect(agents).toContain('agents/TESTING.md');
     expect(agents).toContain('agents/knowledge/INDEX.md');
     expect(agents).toContain('<!-- nest-cqrs:managed:commands:start -->');
     expect(agents).toContain('Build: `npm run build`');
@@ -148,6 +150,12 @@ describe('init foundation', () => {
     expect(index).toContain('Do not create empty placeholder notes');
     expect(index).toContain('No feature or topic notes have been created yet.');
     expect(index).not.toContain('./order-lifecycle.md');
+
+    const testing = plan.generated['agents/TESTING.md'];
+    expect(testing).toContain('This project uses Jest');
+    expect(testing).toContain('Do not install, replace, or reconfigure a test framework');
+    expect(testing).toContain('extensionless relative imports');
+    expect(testing).toContain('do not silently rewrite project tooling');
 
     for (const path of guidancePaths) {
       const links = [...plan.generated[path].matchAll(/\]\(([^)]+\.md)\)/g)].map((match) => match[1]);
@@ -222,6 +230,7 @@ describe('init foundation', () => {
     expect(plan.generated['src/app.module.ts']).not.toContain('TypeOrmModule');
     expect(plan.generated['src/app.module.ts']).not.toContain('ThrottlerGuard');
     expect(plan.generated['package.json']).not.toContain('node-flow');
+    expect(JSON.parse(plan.generated['package.json']).dependencies['@fastify/static']).toBe('^10.0.0');
     expect(plan.generated['tsconfig.json']).toBeUndefined();
     expect(plan.generated['nest-cli.json']).toBeUndefined();
     expect(JSON.parse(plan.generated['package.json']).scripts.format).toBe('prettier --write "src/**/*.ts" "test/**/*.ts"');
@@ -238,16 +247,12 @@ describe('init foundation', () => {
     expect(plan.generated['src/health/health.controller.ts']).toContain("@Get('live')");
     expect(plan.generated['src/health/health.controller.ts']).toContain("@Get('ready')");
     expect(plan.generated['src/health/health.controller.ts']).toContain('@ApiSuccessEnvelope');
-    expect(plan.generated['test/setup-env.ts']).toContain("NODE_ENV: 'test'");
-    expect(plan.generated['test/setup-env.ts']).toContain("SWAGGER_ENABLED: 'true'");
-    expect(plan.generated['test/setup-env.ts']).toContain("CORS_ORIGINS: ''");
-    expect(plan.generated['test/setup-env.ts']).toContain("DB_HOST: '127.0.0.1'");
-    expect(plan.generated['test/app.e2e-spec.ts']).toContain("import './setup-env'");
+    expect(plan.generated['src/health/health.controller.spec.ts']).toBeUndefined();
+    expect(plan.generated['test/setup-env.ts']).toBeUndefined();
+    expect(plan.generated['test/app.e2e-spec.ts']).toBeUndefined();
     expect(plan.generated['.env.test.example']).toBeUndefined();
     expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiSuccessEnvelope');
     expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiErrorEnvelope');
-    expect(plan.generated['test/app.e2e-spec.ts']).toContain("#/components/schemas/ApiSuccessResponse");
-    expect(plan.generated['test/app.e2e-spec.ts']).toContain("#/components/schemas/ApiErrorResponse");
     expect(plan.generated['src/common/interfaces/api-response.interface.ts']).toContain('@ApiProperty');
     expect(plan.generated['.env.example']).toContain('NODE_ENV="development"');
     expect(plan.generated['.env.example']).toContain('PORT=3000');
@@ -269,17 +274,18 @@ describe('init foundation', () => {
     writeFileSync(join(esmRoot, 'package.json'), JSON.stringify(packageJson));
     const esm = buildPlan(esmRoot, '0.1.0');
     expect(esm.generated['src/main.ts']).toContain("from './app.module.js'");
-    expect(esm.generated['test/app.e2e-spec.ts']).toContain("import './setup-env.js'");
-    expect(esm.generated['src/health/health.controller.spec.ts']).toContain('vi.fn()');
+    expect(esm.generated['test/app.e2e-spec.ts']).toBeUndefined();
+    expect(esm.generated['src/health/health.controller.spec.ts']).toBeUndefined();
+    expect(esm.generated['agents/TESTING.md']).toContain('This project uses Vitest');
+    expect(esm.generated['agents/TESTING.md']).toContain('`.js` suffixes');
 
     const esmDatabase = buildPlan(esmRoot, '0.1.0', undefined, ['database'], {
       type: 'postgres',
       migrations: false,
     });
-    expect(esmDatabase.generated['vitest.config.integration.ts']).toBeDefined();
+    expect(esmDatabase.generated['vitest.config.integration.ts']).toBeUndefined();
     expect(esmDatabase.generated['test/jest-integration.json']).toBeUndefined();
-    expect(JSON.parse(esmDatabase.generated['package.json']).scripts['test:integration'])
-      .toContain('vitest.config.integration.ts');
+    expect(JSON.parse(esmDatabase.generated['package.json']).scripts['test:integration']).toBeUndefined();
   });
 
   it('composes PostgreSQL migrations and rate limiting into the foundation plan', () => {
@@ -288,8 +294,7 @@ describe('init foundation', () => {
     expect(plan.generated['src/app.module.ts']).toContain('TypeOrmModule.forRootAsync');
     expect(plan.generated['src/app.module.ts']).toContain('ThrottlerModule.forRoot');
     expect(plan.generated['src/app.module.ts']).toContain('{ provide: APP_GUARD, useClass: ThrottlerGuard }');
-    expect(plan.generated['test/rate-limit.e2e-spec.ts']).toContain("expect(429)");
-    expect(plan.generated['test/rate-limit.e2e-spec.ts']).toContain('requestNumber < 100');
+    expect(plan.generated['test/rate-limit.e2e-spec.ts']).toBeUndefined();
     expect(plan.generated['src/instrumentation.ts']).toBeUndefined();
     expect(plan.generated['compose.jaeger.yml']).toBeUndefined();
     expect(plan.generated['src/database/data-source.ts']).toContain('type: databaseType');
@@ -302,12 +307,11 @@ describe('init foundation', () => {
     expect(plan.generated['src/health/health.controller.ts']).toContain("ready(): Promise<HealthCheckResult>");
     expect(plan.generated['src/health/health.controller.ts']).toContain("this.health.check([])");
     expect(plan.generated['src/health/health.controller.ts']).toContain("this.db.pingCheck('database'");
-    expect(plan.generated['test/app.e2e-spec.ts']).not.toContain("GET /api/health/ready");
-    expect(plan.generated['test/app.e2e-spec.ts']).toContain('getDataSourceToken()');
-    expect(plan.generated['test/database.integration-spec.ts']).toContain("GET /api/health/ready");
-    expect(plan.generated['test/setup-integration-env.ts']).toContain('RUN_DATABASE_INTEGRATION');
-    expect(plan.generated['test/jest-integration.json']).toContain('.integration-spec.ts$');
-    expect(JSON.parse(plan.generated['package.json']).scripts['test:integration']).toContain('test/jest-integration.json');
+    expect(plan.generated['test/app.e2e-spec.ts']).toBeUndefined();
+    expect(plan.generated['test/database.integration-spec.ts']).toBeUndefined();
+    expect(plan.generated['test/setup-integration-env.ts']).toBeUndefined();
+    expect(plan.generated['test/jest-integration.json']).toBeUndefined();
+    expect(JSON.parse(plan.generated['package.json']).scripts['test:integration']).toBeUndefined();
     expect(plan.generated['.env.example']).toContain('DB_HOST="localhost"');
     expect(plan.generated['.env.example']).toContain('# Database type: postgres, mysql, or mongodb.');
     expect(Object.keys(plan.manifest.presets)).toEqual(expect.arrayContaining(['database', 'migrations', 'rate-limit']));
