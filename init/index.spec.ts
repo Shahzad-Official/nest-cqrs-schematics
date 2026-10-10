@@ -213,6 +213,9 @@ describe('init foundation', () => {
     const plan = buildPlan(root, '0.1.0');
     expect(plan.generated['src/main.ts']).toContain('FastifyAdapter');
     expect(plan.generated['src/main.ts']).toContain("'docs'");
+    expect(plan.generated['src/main.ts']).toContain('Application is running at ${applicationUrl}');
+    expect(plan.generated['src/main.ts']).toContain('API base URL: ${applicationUrl}/${apiPrefix}');
+    expect(plan.generated['src/main.ts']).toContain('Swagger UI: ${applicationUrl}/docs');
     expect(plan.generated['src/config/env.d.ts']).toContain('declare global');
     expect(plan.generated['src/config/env.d.ts']).toContain('interface ProcessEnv');
     expect(plan.generated['src/config/env.validation.ts']).toContain("NODE_ENV: Joi.string()");

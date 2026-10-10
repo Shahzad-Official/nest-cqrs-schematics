@@ -144,6 +144,9 @@ Swagger is installed by the foundation. When `SWAGGER_ENABLED=true`, its UI is a
 /docs
 ```
 
+On startup, the application logger prints the listening URL, the API base URL
+including the configured prefix, and the Swagger UI URL when Swagger is enabled.
+
 ## Non-interactive initialization
 
 Use `--yes` to accept the non-optional defaults and skip confirmation prompts:

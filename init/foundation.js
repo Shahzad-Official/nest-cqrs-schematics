@@ -38,9 +38,12 @@ async function bootstrap(): Promise<void> {
     { bufferLogs: true },
   );
   const config = app.get<ConfigService<EnvConfig, true>>(ConfigService);
+  const logger = app.get(Logger);
+  const apiPrefix = config.getOrThrow('apiPrefix', { infer: true });
+  const swaggerEnabled = config.getOrThrow('swaggerEnabled', { infer: true });
 
-  app.useLogger(app.get(Logger));
-  app.setGlobalPrefix(config.getOrThrow('apiPrefix', { infer: true }));
+  app.useLogger(logger);
+  app.setGlobalPrefix(apiPrefix);
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -56,7 +59,7 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  if (config.getOrThrow('swaggerEnabled', { infer: true })) {
+  if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Nest API')
       .setDescription('API documentation')
@@ -70,6 +73,10 @@ async function bootstrap(): Promise<void> {
   }
 
   await app.listen(config.getOrThrow('port', { infer: true }), '0.0.0.0');
+  const applicationUrl = await app.getUrl();
+  logger.log(\`Application is running at \${applicationUrl}\`);
+  logger.log(\`API base URL: \${applicationUrl}/\${apiPrefix}\`);
+  if (swaggerEnabled) logger.log(\`Swagger UI: \${applicationUrl}/docs\`);
 }
 
 void bootstrap();
