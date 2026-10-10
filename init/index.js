@@ -15,6 +15,30 @@ const addMissing = (existing = {}, additions) => Object.fromEntries([
   ...Object.entries(existing),
 ]);
 
+function usesEsmImports(root) {
+  const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  if (packageJson.type === 'module') return true;
+
+  const tsconfig = JSON.parse(readFileSync(resolve(root, 'tsconfig.json'), 'utf8'));
+  const moduleKind = String(tsconfig.compilerOptions?.module ?? '').toLowerCase();
+  const moduleResolution = String(tsconfig.compilerOptions?.moduleResolution ?? '').toLowerCase();
+  return moduleResolution !== 'bundler'
+    && ['es2015', 'es2020', 'es2022', 'es6', 'esnext'].includes(moduleKind);
+}
+
+function applyImportStyle(files, esm) {
+  if (!esm) return files;
+  const relativeImport = /((?:from\s+|import\s*)['"])(\.{1,2}\/[^'"]+?)(?<!\.js)(['"])/g;
+  for (const [path, content] of Object.entries(files)) {
+    if (path.endsWith('.ts')) files[path] = content.replace(relativeImport, '$1$2.js$3');
+  }
+  return files;
+}
+
+const detectTestRunner = (packageJson) => packageJson.devDependencies?.vitest || packageJson.dependencies?.vitest
+  ? 'vitest'
+  : 'jest';
+
 function gitignoreAppend(root) {
   const path = resolve(root, '.gitignore');
   if (!existsSync(path)) return `${gitignoreEntries.join('\n')}\n`;
@@ -43,6 +67,7 @@ export function ensureGitignore(root, dryRun = false) {
 export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = [], databaseOptions = {}) {
   const packagePath = resolve(root, 'package.json');
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+  const testRunner = detectTestRunner(packageJson);
   packageJson.dependencies = addMissing(packageJson.dependencies, runtimeDependencies);
   delete packageJson.dependencies?.['@nestjs/platform-express'];
   packageJson.devDependencies = addMissing(packageJson.devDependencies, devDependencies);
@@ -56,7 +81,13 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
     selected: [...normalizedPresets],
     databaseType: databaseOptions.type,
     migrations: databaseOptions.migrations,
+    testRunner,
   });
+  if (testRunner === 'vitest' && generated['src/health/health.controller.spec.ts']) {
+    generated['src/health/health.controller.spec.ts'] = generated['src/health/health.controller.spec.ts']
+      .replaceAll('jest.fn()', 'vi.fn()');
+  }
+  applyImportStyle(generated, usesEsmImports(root));
   Object.assign(generated, renderGuidanceFiles({
     packageManager: detectPackageManager(root),
     packageJson,
@@ -302,7 +333,8 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     'src/health/health.controller.ts', 'src/health/health.module.ts', 'src/health/health.controller.spec.ts',
     'src/database/data-source.ts', 'src/database/migrations/.gitkeep', 'test/app.e2e-spec.ts',
     'test/rate-limit.e2e-spec.ts',
-    'test/database.integration-spec.ts', 'test/setup-integration-env.ts', 'test/jest-integration.json', '.env.example',
+    'test/database.integration-spec.ts', 'test/setup-integration-env.ts', 'test/jest-integration.json',
+    'vitest.config.integration.ts', '.env.example',
   ];
   const generated = Object.fromEntries(controlledPaths.filter((path) => existsSync(resolve(root, path))).map((path) => [path, readFileSync(resolve(root, path), 'utf8')]));
   const originalPaths = new Set(Object.keys(generated));
@@ -314,7 +346,9 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     selected: names,
     databaseType: effectiveDatabaseOptions.type,
     migrations: effectiveDatabaseOptions.migrations,
+    testRunner: detectTestRunner(packageJson),
   });
+  applyImportStyle(generated, usesEsmImports(root));
   generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
   if (manifest.foundation?.version >= GUIDANCE_FOUNDATION_VERSION) {
     const selectedPresets = [...new Set([

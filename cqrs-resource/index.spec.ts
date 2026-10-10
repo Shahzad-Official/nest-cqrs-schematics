@@ -106,6 +106,27 @@ describe('cqrs-resource schematic', () => {
       "import { StockItemsModule } from './features/stock-items/stock-items.module.js';",
     );
     expect(appModule).toContain('imports: [StockItemsModule]');
+    expect(
+      tree.readContent('/src/features/stock-items/controllers/stock-items.controller.ts'),
+    ).toContain("from '../dtos/create-stock-item.dto.js'");
+  });
+
+  it('keeps extensionless imports in a CommonJS project', async () => {
+    const runner = new SchematicTestRunner('cqrs-schematics', collectionPath);
+    const input = nestProjectTree();
+    input.overwrite('/package.json', JSON.stringify({}));
+    const tree = await runner.runSchematic(
+      'cqrs-resource',
+      { name: 'orders' },
+      input,
+    );
+
+    expect(tree.readContent('/src/app.module.ts')).toContain(
+      "from './features/orders/orders.module';",
+    );
+    expect(
+      tree.readContent('/src/features/orders/controllers/orders.controller.ts'),
+    ).toContain("from '../dtos/create-order.dto'");
   });
 
   it('adds OpenAPI metadata when Swagger is installed in the app', async () => {

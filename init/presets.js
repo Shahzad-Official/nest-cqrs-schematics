@@ -14,7 +14,7 @@ const addProvider = (source, expression) => source.includes(`{ provide: APP_GUAR
   `    { provide: APP_GUARD, useClass: ${expression} },\n    { provide: APP_FILTER, useClass: GlobalExceptionFilter },`,
 );
 
-export function applyPresets({ files, packageJson, selected, databaseType, migrations = false }) {
+export function applyPresets({ files, packageJson, selected, databaseType, migrations = false, testRunner = 'jest' }) {
   const enabled = new Set(selected);
   for (const name of enabled) {
     if (!presetNames.includes(name)) throw new Error(`Unknown preset: ${name}`);
@@ -22,7 +22,7 @@ export function applyPresets({ files, packageJson, selected, databaseType, migra
   if (enabled.has('database')) {
     if (!dependencies[databaseType]) throw new Error(`Choose a database: ${databaseTypes.join(', ')}`);
     if ((migrations || enabled.has('migrations')) && databaseType === 'mongodb') throw new Error('TypeORM schema migrations are not generated for MongoDB; use custom data-migration logic.');
-    applyDatabase(files, packageJson, databaseType);
+    applyDatabase(files, packageJson, databaseType, testRunner);
   }
   if (enabled.has('migrations') && !enabled.has('database')) {
     if (!databaseTypes.includes(databaseType)) throw new Error('Add a supported database before adding migrations.');
@@ -65,13 +65,18 @@ describe('rate limiting (e2e)', () => {
   return [...enabled];
 }
 
-function applyDatabase(files, packageJson, databaseType) {
+function applyDatabase(files, packageJson, databaseType, testRunner) {
   packageJson.dependencies = {
     '@nestjs/typeorm': '^12.0.0',
     ...dependencies[databaseType],
     ...packageJson.dependencies,
   };
-  packageJson.scripts = { ...packageJson.scripts, 'test:integration': 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-integration.json' };
+  packageJson.scripts = {
+    ...packageJson.scripts,
+    'test:integration': testRunner === 'vitest'
+      ? 'vitest run --config ./vitest.config.integration.ts'
+      : 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-integration.json',
+  };
   files['test/setup-env.ts'] = files['test/setup-env.ts'].replace(
     "DB_TYPE: 'postgres'",
     `DB_TYPE: '${databaseType}'`,
@@ -160,13 +165,28 @@ export class HealthController {
     "    await app.getHttpAdapter().getInstance().ready();",
     "    await app.getHttpAdapter().getInstance().ready();\n    expect(app.get<DataSource>(getDataSourceToken()).isInitialized).toBe(false);",
   );
-  files['test/jest-integration.json'] ??= `${JSON.stringify({
-    moduleFileExtensions: ['js', 'json', 'ts'],
-    rootDir: '..',
-    testEnvironment: 'node',
-    testRegex: '.integration-spec.ts$',
-    transform: { '^.+\\.(t|j)s$': 'ts-jest' },
-  }, null, 2)}\n`;
+  if (testRunner === 'vitest') {
+    files['vitest.config.integration.ts'] ??= `import { defineConfig } from 'vitest/config';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+export default defineConfig({
+  plugins: [tsconfigPaths()],
+  test: {
+    globals: true,
+    root: './',
+    include: ['test/**/*.integration-spec.ts'],
+  },
+});
+`;
+  } else {
+    files['test/jest-integration.json'] ??= `${JSON.stringify({
+      moduleFileExtensions: ['js', 'json', 'ts'],
+      rootDir: '..',
+      testEnvironment: 'node',
+      testRegex: '.integration-spec.ts$',
+      transform: { '^.+\\.(t|j)s$': 'ts-jest' },
+    }, null, 2)}\n`;
+  }
   files['test/setup-integration-env.ts'] ??= `if (process.env.RUN_DATABASE_INTEGRATION !== 'true') {
   throw new Error('Set RUN_DATABASE_INTEGRATION=true and explicit DB_* variables to run database integration tests.');
 }

@@ -200,7 +200,7 @@ describe('init foundation', () => {
     expect(buildPlan(yarnRoot, '0.1.0').generated['AGENTS.md']).toContain('Build: `yarn build`');
   });
 
-  it('builds a Fastify ESM foundation without deferred integrations', () => {
+  it('builds a Fastify foundation without deferred integrations', () => {
     const root = project();
     const plan = buildPlan(root, '0.1.0');
     expect(plan.generated['src/main.ts']).toContain('FastifyAdapter');
@@ -252,6 +252,34 @@ describe('init foundation', () => {
     expect(plan.generated['.env.example']).toContain('NODE_ENV="development"');
     expect(plan.generated['.env.example']).toContain('PORT=3000');
     expect(plan.generated['.env.development.example']).toBeUndefined();
+  });
+
+  it('matches generated relative imports to the existing project module type', () => {
+    const commonJsRoot = project();
+    const commonJs = buildPlan(commonJsRoot, '0.1.0');
+    expect(commonJs.generated['src/main.ts']).toContain("from './app.module'");
+    expect(commonJs.generated['src/main.ts']).not.toContain("from './app.module.js'");
+
+    const esmRoot = project();
+    const packageJson = JSON.parse(readFileSync(join(esmRoot, 'package.json'), 'utf8'));
+    packageJson.type = 'module';
+    delete packageJson.devDependencies.jest;
+    packageJson.devDependencies.vitest = '^4.1.2';
+    packageJson.devDependencies['vite-tsconfig-paths'] = '^5.1.4';
+    writeFileSync(join(esmRoot, 'package.json'), JSON.stringify(packageJson));
+    const esm = buildPlan(esmRoot, '0.1.0');
+    expect(esm.generated['src/main.ts']).toContain("from './app.module.js'");
+    expect(esm.generated['test/app.e2e-spec.ts']).toContain("import './setup-env.js'");
+    expect(esm.generated['src/health/health.controller.spec.ts']).toContain('vi.fn()');
+
+    const esmDatabase = buildPlan(esmRoot, '0.1.0', undefined, ['database'], {
+      type: 'postgres',
+      migrations: false,
+    });
+    expect(esmDatabase.generated['vitest.config.integration.ts']).toBeDefined();
+    expect(esmDatabase.generated['test/jest-integration.json']).toBeUndefined();
+    expect(JSON.parse(esmDatabase.generated['package.json']).scripts['test:integration'])
+      .toContain('vitest.config.integration.ts');
   });
 
   it('composes PostgreSQL migrations and rate limiting into the foundation plan', () => {

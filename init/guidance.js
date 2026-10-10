@@ -144,7 +144,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
   ].join('\n');
 }
 
-function codebaseMapBlock({ selectedPresets, dummyFeature }) {
+function codebaseMapBlock({ selectedPresets, dummyFeature, testRunner }) {
   const selected = new Set(selectedPresets);
   const appDescription = [
     'root module and global infrastructure registration',
@@ -183,7 +183,9 @@ function codebaseMapBlock({ selectedPresets, dummyFeature }) {
       '',
       '- `test/database.integration-spec.ts` — explicit real-database readiness test.',
       '- `test/setup-integration-env.ts` — requires opt-in and explicit database connection variables.',
-      '- `test/jest-integration.json` — isolated database integration-test configuration.',
+      testRunner === 'vitest'
+        ? '- `vitest.config.integration.ts` — isolated database integration-test configuration.'
+        : '- `test/jest-integration.json` — isolated database integration-test configuration.',
       '',
     );
   }
@@ -199,8 +201,10 @@ function codebaseMapBlock({ selectedPresets, dummyFeature }) {
     '## Tests and tooling',
     '',
     '- `test/app.e2e-spec.ts` — generated application E2E health test.',
-    '- Nest CLI\'s existing Jest configuration — unit-test configuration.',
-    '- `test/jest-e2e.json` — Nest CLI\'s E2E-test configuration.',
+    `- Nest CLI's existing ${testRunner === 'vitest' ? 'Vitest' : 'Jest'} configuration — unit-test configuration.`,
+    testRunner === 'vitest'
+      ? '- `vitest.config.e2e.ts` — Nest CLI\'s E2E-test configuration.'
+      : '- `test/jest-e2e.json` — Nest CLI\'s E2E-test configuration.',
     '- `.env.example` — documented starter environment values.',
     '- `.nest-cqrs.json` — completed initializer manifest.',
   );
@@ -213,9 +217,12 @@ function withManagedBlock(name, content) {
 }
 
 export function renderGuidanceFiles({ packageManager, packageJson, selectedPresets = [], databaseType, dummyFeature }) {
+  const testRunner = packageJson.devDependencies?.vitest || packageJson.dependencies?.vitest
+    ? 'vitest'
+    : 'jest';
   const commands = withManagedBlock('commands', commandBlock(packageManager, packageJson));
   const architecture = withManagedBlock('architecture', architectureBlock({ selectedPresets, databaseType, dummyFeature }));
-  const codebaseMap = withManagedBlock('codebase-map', codebaseMapBlock({ selectedPresets, dummyFeature }));
+  const codebaseMap = withManagedBlock('codebase-map', codebaseMapBlock({ selectedPresets, dummyFeature, testRunner }));
 
   return {
     'AGENTS.md': markdown([
@@ -239,7 +246,7 @@ export function renderGuidanceFiles({ packageManager, packageJson, selectedPrese
       '- Read environment values through the typed, Joi-validated configuration layer. Do not introduce scattered direct environment access in application code.',
       '- Preserve DTO validation, the global validation pipe, response interception, exception handling, and structured Pino logging conventions.',
       '- Do not log credentials, tokens, connection strings, or other secrets.',
-      '- Add or update proportionate Jest coverage for behavior changes.',
+      `- Add or update proportionate ${testRunner === 'vitest' ? 'Vitest' : 'Jest'} coverage for behavior changes.`,
       '- Keep linting, formatting, build, unit tests, and E2E tests passing when relevant to the task.',
       '',
       '## Project commands',

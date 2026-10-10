@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const cli = resolve(repositoryRoot, 'bin/nest-cqrs.js');
 
-function createNestProject(name: string): string {
+function createNestProject(name: string, esm = false): string {
   const root = mkdtempSync(join(tmpdir(), `nest-cqrs-${name}-`));
   mkdirSync(join(root, 'src'), { recursive: true });
   writeFileSync(join(root, 'package.json'), `${JSON.stringify({
@@ -95,6 +95,35 @@ export default config;
   writeFileSync(join(root, 'src/main.ts'), 'export {};\n');
   writeFileSync(join(root, 'src/app.module.ts'), 'export {};\n');
   writeFileSync(join(root, '.gitignore'), '# Nest defaults\n/dist\n/node_modules\n\n# project rule\n.local-cache/\n');
+  if (esm) {
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    packageJson.type = 'module';
+    Object.assign(packageJson.scripts, {
+      test: 'vitest run',
+      'test:e2e': 'vitest run --config ./vitest.config.e2e.ts',
+    });
+    for (const dependency of ['@types/jest', 'jest', 'ts-jest']) delete packageJson.devDependencies[dependency];
+    Object.assign(packageJson.devDependencies, {
+      '@vitest/coverage-v8': '^4.1.2',
+      'vite-tsconfig-paths': '^5.1.4',
+      vitest: '^4.1.2',
+    });
+    writeFileSync(join(root, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
+    const tsconfig = JSON.parse(readFileSync(join(root, 'tsconfig.json'), 'utf8'));
+    tsconfig.compilerOptions.types = ['vitest/globals', 'node'];
+    writeFileSync(join(root, 'tsconfig.json'), `${JSON.stringify(tsconfig, null, 2)}\n`);
+    rmSync(join(root, 'jest.config.ts'));
+    writeFileSync(join(root, 'vitest.config.ts'), `import { defineConfig } from 'vitest/config';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+export default defineConfig({ plugins: [tsconfigPaths()], test: { globals: true, include: ['**/*.spec.ts'] } });
+`);
+    writeFileSync(join(root, 'vitest.config.e2e.ts'), `import { defineConfig } from 'vitest/config';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+export default defineConfig({ plugins: [tsconfigPaths()], test: { globals: true, include: ['test/**/*.e2e-spec.ts'] } });
+`);
+  }
   return root;
 }
 
@@ -117,8 +146,8 @@ function run(root: string, command: string, args: string[]): void {
   }
 }
 
-function verifyGeneratedApplication(name: string, initArgs: string[]): void {
-  const root = createNestProject(name);
+function verifyGeneratedApplication(name: string, initArgs: string[], esm = false): void {
+  const root = createNestProject(name, esm);
   try {
     run(root, process.execPath, [cli, 'init', '--skip-install', '--yes', ...initArgs]);
     run(root, 'pnpm', ['install', '--lockfile-only']);
@@ -140,6 +169,10 @@ function verifyGeneratedApplication(name: string, initArgs: string[]): void {
 describe('generated application acceptance', () => {
   it('verifies the default foundation', () => {
     verifyGeneratedApplication('foundation', ['--no-dummy-feature']);
+  });
+
+  it('verifies an ESM and Vitest foundation', () => {
+    verifyGeneratedApplication('esm-foundation', ['--no-dummy-feature'], true);
   });
 
   it('verifies rate limiting, PostgreSQL migrations, and a generated CQRS feature', () => {

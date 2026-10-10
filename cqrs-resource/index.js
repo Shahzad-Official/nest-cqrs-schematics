@@ -12,7 +12,6 @@ import {
 import { ModuleDeclarator } from '@nestjs/schematics/dist/utils/module.declarator.js';
 import { ModuleFinder } from '@nestjs/schematics/dist/utils/module.finder.js';
 import { ModuleMetadataDeclarator } from '@nestjs/schematics/dist/utils/module-metadata.declarator.js';
-import { isEsmProject } from '@nestjs/schematics/dist/utils/source-root.helpers.js';
 
 function singularize(value) {
   if (value.endsWith('ies')) return `${value.slice(0, -3)}y`;
@@ -34,6 +33,7 @@ export default function cqrsResource(options) {
     const packageJson = packageFile ? JSON.parse(packageFile.toString()) : {};
     const packages = { ...packageJson.dependencies, ...packageJson.devDependencies };
     const swagger = Boolean(packages['@nestjs/swagger']);
+    const esm = usesEsmImports(tree);
 
     return chain([
       registerFeatureModule({ feature, featurePath }),
@@ -52,7 +52,36 @@ export default function cqrsResource(options) {
           move(featurePath),
         ]),
       ),
+      applyGeneratedImportStyle({ featurePath, esm }),
     ])(tree, context);
+  };
+}
+
+function usesEsmImports(tree) {
+  try {
+    const packageJson = JSON.parse(tree.read('/package.json')?.toString() ?? '{}');
+    if (packageJson.type === 'module') return true;
+    const tsconfig = JSON.parse(tree.read('/tsconfig.json')?.toString() ?? '{}');
+    const moduleKind = String(tsconfig.compilerOptions?.module ?? '').toLowerCase();
+    const moduleResolution = String(tsconfig.compilerOptions?.moduleResolution ?? '').toLowerCase();
+    return moduleResolution !== 'bundler'
+      && ['es2015', 'es2020', 'es2022', 'es6', 'esnext'].includes(moduleKind);
+  } catch {
+    return false;
+  }
+}
+
+function applyGeneratedImportStyle({ featurePath, esm }) {
+  return (tree) => {
+    if (!esm) return tree;
+    const prefix = `/${featurePath}/`;
+    const relativeImport = /((?:from\s+|import\s*)['"])(\.{1,2}\/[^'"]+?)(?<!\.js)(['"])/g;
+    tree.visit((path) => {
+      if (!path.startsWith(prefix) || !path.endsWith('.ts')) return;
+      const content = tree.read(path)?.toString();
+      if (content) tree.overwrite(path, content.replace(relativeImport, '$1$2.js$3'));
+    });
+    return tree;
   };
 }
 
@@ -72,7 +101,7 @@ function registerFeatureModule({ feature, featurePath }) {
       type: 'module',
       metadata: 'imports',
       symbol,
-      isEsm: isEsmProject(tree),
+      isEsm: usesEsmImports(tree),
     };
     const content = tree.read(parentModule).toString();
     const hasImport = new RegExp(
