@@ -95,7 +95,7 @@ function architectureBlock({ selectedPresets, databaseType, dummyFeature }) {
     '',
     '- NestJS runs on the Fastify adapter.',
     '- `src/main.ts` applies the configured global API prefix.',
-    '- A global `ValidationPipe` transforms inputs, removes unknown properties, and rejects non-whitelisted properties.',
+    '- A global `ValidationPipe` transforms DTO instances, removes unknown properties, and rejects non-whitelisted properties without implicitly coercing field types.',
     '- CORS is enabled only when validated configuration enables it.',
     '',
     '### Module and request architecture',

@@ -213,6 +213,7 @@ describe('init foundation', () => {
     const plan = buildPlan(root, '0.1.0');
     expect(plan.generated['src/main.ts']).toContain('FastifyAdapter');
     expect(plan.generated['src/main.ts']).toContain("'docs'");
+    expect(plan.generated['src/main.ts']).not.toContain('enableImplicitConversion');
     expect(plan.generated['src/main.ts']).toContain('Application is running at ${applicationUrl}');
     expect(plan.generated['src/main.ts']).toContain('API base URL: ${applicationUrl}/${apiPrefix}');
     expect(plan.generated['src/main.ts']).toContain('Swagger UI: ${applicationUrl}/docs');
