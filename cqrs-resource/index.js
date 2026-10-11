@@ -32,6 +32,11 @@ export default function cqrsResource(options) {
     const packageJson = packageFile ? JSON.parse(packageFile.toString()) : {};
     const packages = { ...packageJson.dependencies, ...packageJson.devDependencies };
     const swagger = Boolean(packages['@nestjs/swagger']);
+    const manifest = (() => {
+      try { return JSON.parse(tree.read('/.nest-cqrs.json')?.toString() ?? '{}'); } catch { return {}; }
+    })();
+    const database = manifest.presets?.database?.type
+      ?? (packages.mongodb ? 'mongodb' : packages.pg ? 'postgres' : packages.mysql2 ? 'mysql' : 'plain');
     const esm = usesEsmImports(tree);
 
     return chain([
@@ -46,7 +51,7 @@ export default function cqrsResource(options) {
             }
             return !path.endsWith('.spec.ts.template');
           }),
-          template({ ...strings, feature, name, crud, spec: false, swagger }),
+          template({ ...strings, feature, name, crud, spec: false, swagger, database }),
           renameTemplateFiles(),
           move(featurePath),
         ]),

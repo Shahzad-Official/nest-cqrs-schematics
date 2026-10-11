@@ -16,6 +16,11 @@
       "description": "Generate and register a CQRS query and handler.",
       "factory": "./request/index.js#query",
       "schema": "./request/schema.json"
+    },
+    "entity": {
+      "description": "Generate a database-aware entity.",
+      "factory": "./entity/index.js#default",
+      "schema": "./entity/schema.json"
     }
   }
 }

@@ -4,6 +4,12 @@ Set up a new NestJS application with a production-oriented Fastify and CQRS foun
 
 This tool is designed to run **inside an existing NestJS project**. Create the Nest project first, enter its root directory, and then run `nest-cqrs init`.
 
+Run `nest-cqrs --help` for colorized command, generator, and option tables. Main
+commands support `i` (`init`), `a` (`add`), `g` (`generate`), and `r`
+(`resource`). Generator aliases are `cmd`/`c`, `q`, and `e` for commands,
+queries, and entities respectively. Common options also have short aliases shown
+in the help table; set `NO_COLOR=1` to disable ANSI colors.
+
 ## What it adds
 
 The initializer configures:
@@ -316,6 +322,32 @@ handler below the supplied path under the configured Nest `sourceRoot`. With
 only a name, it generates under `src/commands` or `src/queries`. It registers
 the handler in the nearest module when one exists. The older `--feature orders`
 form remains available as a shortcut. Use `--dry-run` to preview either operation.
+
+### Generate database-aware entities
+
+Generate an entity at a source-relative path:
+
+```bash
+nest-cqrs generate entity features/products/product
+```
+
+The generator reads the selected database from `.nest-cqrs.json`. PostgreSQL and
+MySQL entities receive a UUID primary key; MongoDB entities receive an
+`ObjectId`. Database entities also include created and updated timestamp columns.
+When no database is configured, the generator creates a plain class and prints
+a warning. Override detection when needed with `--database postgres`, `mysql`,
+`mongodb`, or `plain`.
+
+Domain fields are optional and are generated only when explicitly supplied:
+
+```bash
+nest-cqrs g entity features/products/product \
+  --fields "name:string:unique,price:decimal,description?:text"
+```
+
+Supported field types are `string`, `text`, `integer`, `number`, `decimal`,
+`boolean`, and `date`. Append `?` to the field name for a nullable field and use
+the optional `unique` modifier for a unique column.
 
 ## Generated project commands
 

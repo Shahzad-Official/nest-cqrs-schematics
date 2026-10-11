@@ -169,4 +169,30 @@ export class AppModule {}
     expect(appModule.match(/import \{ OrdersModule \}/g)).toHaveLength(1);
     expect(appModule).toContain('imports: [OrdersModule]');
   });
+
+  it('generates a UUID entity when a relational database is configured', async () => {
+    const runner = new SchematicTestRunner('cqrs-schematics', collectionPath);
+    const input = nestProjectTree();
+    input.create('/.nest-cqrs.json', JSON.stringify({
+      presets: { database: { type: 'postgres' } },
+    }));
+    const tree = await runner.runSchematic('cqrs-resource', { name: 'products' }, input);
+    const entity = tree.readContent('/src/features/products/entities/product.entity.ts');
+
+    expect(entity).toContain("@PrimaryGeneratedColumn('uuid')");
+    expect(entity).toContain('createdAt!: Date');
+  });
+
+  it('generates an ObjectId entity when MongoDB is configured', async () => {
+    const runner = new SchematicTestRunner('cqrs-schematics', collectionPath);
+    const input = nestProjectTree();
+    input.create('/.nest-cqrs.json', JSON.stringify({
+      presets: { database: { type: 'mongodb' } },
+    }));
+    const tree = await runner.runSchematic('cqrs-resource', { name: 'products' }, input);
+    const entity = tree.readContent('/src/features/products/entities/product.entity.ts');
+
+    expect(entity).toContain('@ObjectIdColumn()');
+    expect(entity).toContain('_id!: ObjectId');
+  });
 });

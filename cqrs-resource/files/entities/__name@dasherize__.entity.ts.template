@@ -1,1 +1,29 @@
-export class <%= classify(name) %> {}
+<% if (database === 'mongodb') { %>import { CreateDateColumn, Entity, ObjectIdColumn, UpdateDateColumn } from 'typeorm';
+import { ObjectId } from 'mongodb';
+
+@Entity('<%= dasherize(feature) %>')
+export class <%= classify(name) %> {
+  @ObjectIdColumn()
+  _id!: ObjectId;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+<% } else if (database !== 'plain') { %>import { CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+
+@Entity('<%= dasherize(feature) %>')
+export class <%= classify(name) %> {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}
+<% } else { %>export class <%= classify(name) %> {}
+<% } %>

@@ -10,6 +10,7 @@
   "files": [
     "bin",
     "cqrs-resource",
+    "entity",
     "request",
     "init",
     "collection.json"

@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "EntitySchema",
+  "title": "Database-aware entity options",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Source-relative entity path and name.",
+      "pattern": "^[A-Za-z][A-Za-z0-9 /_\\-]*$"
+    },
+    "feature": {
+      "type": "string",
+      "description": "Optional feature shortcut.",
+      "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$"
+    },
+    "fields": {
+      "type": "string",
+      "description": "Optional comma-separated name:type fields."
+    },
+    "database": {
+      "type": "string",
+      "enum": ["postgres", "mysql", "mongodb", "plain"]
+    }
+  },
+  "required": ["name"]
+}
