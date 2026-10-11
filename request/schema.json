@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "CqrsRequestSchema",
+  "title": "CQRS command or query options",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Request name, for example cancel-order.",
+      "pattern": "^[A-Za-z][A-Za-z0-9 /_\\-]*$"
+    },
+    "feature": {
+      "type": "string",
+      "description": "Optional existing feature that owns the request.",
+      "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$"
+    }
+  },
+  "required": ["name"]
+}

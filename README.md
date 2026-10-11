@@ -297,6 +297,26 @@ To use Nest's standard resource generator instead:
 nest-cqrs orders --structure standard
 ```
 
+### Generate individual commands and queries
+
+Generate a command and handler at a source-relative path:
+
+```bash
+nest-cqrs generate command features/orders/cancel-order
+```
+
+Add a query and handler:
+
+```bash
+nest-cqrs generate query features/orders/find-order
+```
+
+The shorter `g` alias is also supported. The generator creates the request and
+handler below the supplied path under the configured Nest `sourceRoot`. With
+only a name, it generates under `src/commands` or `src/queries`. It registers
+the handler in the nearest module when one exists. The older `--feature orders`
+form remains available as a shortcut. Use `--dry-run` to preview either operation.
+
 ## Generated project commands
 
 Initialization preserves and uses the scripts already supplied by the Nest CLI starter, such as:

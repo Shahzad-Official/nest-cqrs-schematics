@@ -17,6 +17,8 @@ const collectionPath = resolve(packageRoot, 'collection.json');
 function printHelp() {
   console.log(`Usage:
   nest-cqrs <feature-name> [options]
+  nest-cqrs generate <command|query> <path/name> [options]
+  nest-cqrs g <command|query> <path/name> [options]
   nest-cqrs init [options]
   nest-cqrs add <database|migrations|postgres|mysql|mongodb|rate-limit> [options]
 
@@ -24,6 +26,7 @@ Generate a resource, or initialize the preferred Nest application foundation.
 
 Options:
   --structure <standard|cqrs>  Skip the structure prompt
+  --feature <name>             Optional feature shortcut for a command or query
   --crud / --no-crud          Enable or disable CRUD endpoints
   --dry-run                   Preview without writing files
   --dummy-feature <name>      With init, generate a CQRS feature after setup
@@ -51,6 +54,8 @@ function parseArgs(argv) {
     selectedPresets: [],
     databaseType: undefined,
     migrations: undefined,
+    feature: undefined,
+    generator: undefined,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -72,8 +77,12 @@ function parseArgs(argv) {
     else if (argument.startsWith('--structure=')) {
       result.structure = argument.slice('--structure='.length);
     } else if (argument === '--structure') result.structure = argv[++index];
+    else if (argument.startsWith('--feature=')) result.feature = argument.slice('--feature='.length);
+    else if (argument === '--feature') result.feature = argv[++index];
     else if (argument.startsWith('-')) throw new Error(`Unknown option: ${argument}`);
     else if (!result.name) result.name = argument;
+    else if (['generate', 'g'].includes(result.name) && !result.generator) result.generator = argument;
+    else if (['generate', 'g'].includes(result.name) && !result.requestName) result.requestName = argument;
     else if (result.name === 'add' && !result.preset) result.preset = argument;
     else throw new Error(`Unexpected argument: ${argument}`);
   }
@@ -260,6 +269,32 @@ async function runCqrs(options) {
   if (options.dryRun) console.log('Dry run enabled. No files written.');
 }
 
+async function runRequest(options) {
+  if (!['command', 'query'].includes(options.generator)) {
+    throw new Error('Generator must be either "command" or "query".');
+  }
+  if (!options.requestName) throw new Error(`${options.generator} name is required.`);
+
+  const workflow = new NodeWorkflow(process.cwd(), {
+    dryRun: options.dryRun,
+    force: false,
+    resolvePaths: [packageRoot],
+    schemaValidation: true,
+  });
+  workflow.reporter.subscribe((event) => {
+    const label = event.kind === 'create' ? 'CREATE' : event.kind.toUpperCase();
+    console.log(`${label} ${event.path}`);
+  });
+  await new Promise((resolveExecution, rejectExecution) => {
+    workflow.execute({
+      collection: collectionPath,
+      schematic: options.generator,
+      options: { name: options.requestName, feature: options.feature },
+    }).subscribe({ complete: resolveExecution, error: rejectExecution });
+  });
+  if (options.dryRun) console.log('Dry run enabled. No files written.');
+}
+
 async function runInit(options) {
   await askInitOptions(options);
   assertNestProject();
@@ -301,6 +336,10 @@ async function main() {
     if (options.help) return printHelp();
     if (options.name === 'init') return await runInit(options);
     if (options.name === 'add') return await runAdd(options);
+    if (['generate', 'g'].includes(options.name)) {
+      assertNestProject();
+      return await runRequest(options);
+    }
     await askMissing(options);
     if (!options.name) throw new Error('Feature name is required.');
     if (!['standard', 'cqrs'].includes(options.structure)) {

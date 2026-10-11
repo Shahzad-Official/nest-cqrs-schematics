@@ -6,6 +6,16 @@
       "factory": "./cqrs-resource/index.js#default",
       "schema": "./cqrs-resource/schema.json",
       "aliases": ["cqrs-crud"]
+    },
+    "command": {
+      "description": "Generate and register a CQRS command and handler.",
+      "factory": "./request/index.js#command",
+      "schema": "./request/schema.json"
+    },
+    "query": {
+      "description": "Generate and register a CQRS query and handler.",
+      "factory": "./request/index.js#query",
+      "schema": "./request/schema.json"
     }
   }
 }

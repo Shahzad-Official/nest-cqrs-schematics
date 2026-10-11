@@ -1,0 +1,3 @@
+import { Command } from '@nestjs/cqrs';
+
+export class <%= classify(name) %>Command extends Command<void> {}
