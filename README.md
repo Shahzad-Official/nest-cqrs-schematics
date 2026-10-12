@@ -27,8 +27,12 @@ The initializer configures:
 
 The initializer preserves the Nest CLI starter's scripts, Jest/Vitest, Oxlint, and Prettier
 dependencies and configuration, TypeScript configuration, and Nest CLI
-configuration. Existing dependency versions are retained; the initializer only
-adds packages required by the generated foundation and selected presets.
+configuration. The generated foundation retains a focused HTTP logging unit test but does not
+create feature, E2E, or database-integration placeholder tests. The existing Jest or Vitest
+`test` script receives `--passWithNoTests` so it also succeeds if no tests remain or match the
+runner configuration; all other scripts are preserved. Existing dependency versions are
+retained; the initializer only adds packages required by the generated foundation and selected
+presets.
 For Fastify Swagger UI, this includes the required `@fastify/static` runtime plugin.
 Generated relative imports follow the existing project module type: ESM projects
 receive `.js` suffixes, while CommonJS projects keep extensionless imports.
@@ -189,10 +193,12 @@ nest-cqrs init --all --database postgres --yes
 
 `--all` requires an explicit database choice. Relational databases receive migrations unless `--no-migrations` is provided; MongoDB does not.
 
+During interactive initialization, every yes/no option defaults to yes. Press Enter to accept it. The default starter feature name is `users`.
+
 Generate a starter feature during initialization:
 
 ```bash
-nest-cqrs init --dummy-feature examples --yes
+nest-cqrs init --dummy-feature users --yes
 ```
 
 Skip the dummy feature explicitly:
@@ -287,7 +293,9 @@ This creates a feature-first structure under:
 src/features/orders/
 ```
 
-It includes the feature module, controller, DTOs, entity, commands, queries, and handlers. The feature module is registered in the nearest Nest module. Tests are intentionally not generated; `agents/TESTING.md` guides coding agents when tests are requested later.
+It includes the feature module, controller, request DTOs, endpoint-specific response DTOs, entity, commands, queries, and handlers. The feature module is registered in the nearest Nest module. Tests are intentionally not generated; `agents/TESTING.md` guides coding agents when tests are requested later.
+
+Success response contracts live in the feature's `responses/` directory. Each generated endpoint uses its own named response class in the controller, CQRS command or query, handler return type, and Swagger envelope schema. Swagger derives controller grouping automatically; the generator does not add `@ApiTags` or repetitive `@ApiOperation` summaries.
 
 This generated feature is an **illustrative CQRS scaffold**. Its handlers return placeholder values to show the request flow; they are not production business logic or a persistence-backed reference implementation.
 
@@ -369,6 +377,12 @@ pnpm start:prod
 
 The existing format script is used after dependency installation when test source files remain. When initialization removes the obsolete Nest starter tests and no test sources remain, the initializer runs the existing Prettier executable against `src/**/*.ts` directly so the starter script's unmatched `test/**/*.ts` glob cannot fail. Dry runs and operations using `--skip-install` do not run formatting.
 
+The initializer appends `--passWithNoTests` to the existing Jest or Vitest `test`
+script. The generated HTTP logging unit test runs immediately after generation,
+and the option keeps the command successful if that test is later removed or no
+tests match the runner configuration. Other test scripts and runner configuration
+are unchanged.
+
 When migrations are enabled, the project also receives:
 
 ```bash
@@ -382,7 +396,7 @@ pnpm migration:run:prod
 
 Replace `pnpm` with `npm run` or `yarn` when using another package manager.
 
-The generator does not create unit, E2E, or database-integration tests and does not add test scripts. The generated `agents/TESTING.md` records the detected runner and module format so an AI agent can add deliberate, compatible tests when requested.
+The foundation generates one focused unit test for its HTTP logging policy. It does not generate feature, E2E, or database-integration placeholder tests and does not add test scripts. The generated `agents/TESTING.md` records the detected runner and module format so an AI agent can add deliberate, compatible tests when requested.
 
 ## Environment configuration
 

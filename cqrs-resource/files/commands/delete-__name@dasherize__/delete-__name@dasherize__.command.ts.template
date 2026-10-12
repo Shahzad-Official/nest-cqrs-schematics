@@ -1,6 +1,7 @@
 import { Command } from '@nestjs/cqrs';
+import { Delete<%= classify(name) %>Response } from '../../responses/<%= dasherize(name) %>.responses';
 
-export class Delete<%= classify(name) %>Command extends Command<string> {
+export class Delete<%= classify(name) %>Command extends Command<Delete<%= classify(name) %>Response> {
   constructor(public readonly id: string) {
     super();
   }

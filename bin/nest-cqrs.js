@@ -176,7 +176,7 @@ async function askInitOptions(options) {
     options.selectedPresets = presetNames.filter((name) =>
       name !== 'migrations' || (options.databaseType !== 'mongodb' && options.migrations !== false),
     );
-    options.dummyFeature ||= 'examples';
+    options.dummyFeature ||= 'users';
     return;
   }
   if (options.resume) return;
@@ -186,27 +186,29 @@ async function askInitOptions(options) {
   }
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const askYes = async (question) => (await prompt.question(`${question} [y/N]: `)).trim().toLowerCase();
+    const askYes = async (question) => {
+      const answer = (await prompt.question(`${question} [Y/n]: `)).trim().toLowerCase();
+      return answer !== 'n' && answer !== 'no';
+    };
     if (!options.yes) {
-      if (!options.databaseType && ['y', 'yes'].includes(await askYes('Configure a database with TypeORM?'))) {
+      if (!options.databaseType && await askYes('Configure a database with TypeORM?')) {
         const answer = (await prompt.question('Database (1 = PostgreSQL, 2 = MySQL, 3 = MongoDB) [1]: ')).trim().toLowerCase();
         options.databaseType = answer === '2' || answer === 'mysql' ? 'mysql' : answer === '3' || answer === 'mongodb' ? 'mongodb' : 'postgres';
         options.selectedPresets.push('database');
       }
       if (options.databaseType && options.databaseType !== 'mongodb' && options.migrations === undefined) {
-        options.migrations = ['y', 'yes'].includes(await askYes('Set up TypeScript migration scripts?'));
+        options.migrations = await askYes('Set up TypeScript migration scripts?');
       }
       if (options.migrations && !options.selectedPresets.includes('migrations')) options.selectedPresets.push('migrations');
-      if (['y', 'yes'].includes(await askYes('Configure rate limiting?'))) options.selectedPresets.push('rate-limit');
+      if (await askYes('Configure rate limiting?')) options.selectedPresets.push('rate-limit');
     }
     if (options.databaseType && !options.selectedPresets.includes('database')) options.selectedPresets.push('database');
     options.migrations ??= false;
     if (options.migrations && !options.selectedPresets.includes('migrations')) options.selectedPresets.push('migrations');
     validateDatabaseOptions(options);
     if (options.dummyFeature || options.skipDummyFeature || options.yes) return;
-    const answer = (await prompt.question('Generate a dummy CQRS feature? [y/N]: ')).trim().toLowerCase();
-    if (answer === 'y' || answer === 'yes') {
-      options.dummyFeature = (await prompt.question('Feature name [examples]: ')).trim() || 'examples';
+    if (await askYes('Generate a dummy CQRS feature?')) {
+      options.dummyFeature = (await prompt.question('Feature name [users]: ')).trim() || 'users';
     }
   } finally {
     prompt.close();

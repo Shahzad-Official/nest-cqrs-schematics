@@ -140,20 +140,23 @@ type ResponseSchema = SchemaObject | ReferenceObject;
 interface SuccessResponseOptions {
   status: number;
   description: string;
-  data: ResponseSchema;
+  data?: ResponseSchema;
+  type?: Type<unknown>;
   models?: Type<unknown>[];
 }
 
 export function ApiSuccessEnvelope(options: SuccessResponseOptions): MethodDecorator {
+  const models = [...(options.type ? [options.type] : []), ...(options.models ?? [])];
+  const data = options.type ? { $ref: getSchemaPath(options.type) } : options.data ?? {};
   return applyDecorators(
-    ApiExtraModels(ApiSuccessResponse, ...(options.models ?? [])),
+    ApiExtraModels(ApiSuccessResponse, ...models),
     ApiResponse({
       status: options.status,
       description: options.description,
       schema: {
         allOf: [
           { $ref: getSchemaPath(ApiSuccessResponse) },
-          { properties: { data: options.data } },
+          { properties: { data } },
         ],
       },
     }),
@@ -572,8 +575,8 @@ export const removableDefaultFiles = [
   'test/app.e2e-spec.ts',
 ];
 
-// Tests are intentionally authored later against confirmed project behavior
-// and the application's existing test runner/configuration.
+// Keep the focused HTTP logging unit test above. Feature, health, E2E, and
+// integration tests are intentionally authored later against confirmed behavior.
 for (const path of [
   'src/health/health.controller.spec.ts',
   'test/setup-env.ts',

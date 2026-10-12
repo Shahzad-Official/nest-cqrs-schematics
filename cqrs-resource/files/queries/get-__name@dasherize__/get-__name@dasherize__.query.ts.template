@@ -1,6 +1,7 @@
 import { Query } from '@nestjs/cqrs';
+import { Get<%= classify(name) %>Response } from '../../responses/<%= dasherize(name) %>.responses';
 
-export class Get<%= classify(name) %>Query extends Query<string> {
+export class Get<%= classify(name) %>Query extends Query<Get<%= classify(name) %>Response> {
   constructor(public readonly id: string) {
     super();
   }

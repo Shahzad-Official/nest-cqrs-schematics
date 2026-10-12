@@ -1,12 +1,13 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Update<%= classify(name) %>Command } from './update-<%= dasherize(name) %>.command';
+import { Update<%= classify(name) %>Response } from '../../responses/<%= dasherize(name) %>.responses';
 
 @CommandHandler(Update<%= classify(name) %>Command)
 export class Update<%= classify(name) %>Handler
   implements ICommandHandler<Update<%= classify(name) %>Command>
 {
-  async execute(command: Update<%= classify(name) %>Command): Promise<string> {
+  async execute(command: Update<%= classify(name) %>Command): Promise<Update<%= classify(name) %>Response> {
     void command.update<%= classify(name) %>Dto;
-    return `This action updates a #${command.id} <%= dasherize(name) %>`;
+    return { message: `This action updates a #${command.id} <%= dasherize(name) %>` };
   }
 }

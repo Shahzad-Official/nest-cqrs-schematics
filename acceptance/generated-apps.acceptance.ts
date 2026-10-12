@@ -146,7 +146,12 @@ function run(root: string, command: string, args: string[]): void {
   }
 }
 
-function verifyGeneratedApplication(name: string, initArgs: string[], esm = false): void {
+function verifyGeneratedApplication(
+  name: string,
+  initArgs: string[],
+  esm = false,
+  expectedScripts: Record<string, string> = {},
+): void {
   const root = createNestProject(name, esm);
   try {
     run(root, process.execPath, [cli, 'init', '--skip-install', '--yes', ...initArgs]);
@@ -164,6 +169,11 @@ function verifyGeneratedApplication(name: string, initArgs: string[], esm = fals
     expect(logging).toMatch(
       /redact: \[["']req\.headers\.authorization["'], ["']req\.headers\.cookie["']\]/,
     );
+    const loggingSpec = join(
+      root,
+      'src/common/logging/http-logger.options.spec.ts',
+    );
+    expect(existsSync(loggingSpec)).toBe(true);
     expect(existsSync(join(root, 'src/health/health.controller.spec.ts'))).toBe(false);
     expect(existsSync(join(root, 'test/app.e2e-spec.ts'))).toBe(false);
     expect(existsSync(join(root, 'test/database.integration-spec.ts'))).toBe(false);
@@ -172,12 +182,98 @@ function verifyGeneratedApplication(name: string, initArgs: string[], esm = fals
     expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(
       '# Nest defaults\n/dist\n/node_modules\n\n# project rule\n.local-cache/\n\n.env\n.env.development\n.env.staging\n.env.production\n.nest-cqrs.pending.json\n',
     );
+    const generatedPackage = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    );
+    expect(generatedPackage.scripts.test).toBe(
+      esm
+        ? 'vitest run --passWithNoTests'
+        : 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --passWithNoTests',
+    );
+    expect(generatedPackage.scripts).toMatchObject(expectedScripts);
+
+    rmSync(loggingSpec);
+    run(root, 'pnpm', ['test']);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
 
 describe('generated application acceptance', () => {
+  it('generates the AI project guidance', () => {
+    const root = createNestProject('guidance');
+    try {
+      run(root, process.execPath, [
+        cli,
+        'init',
+        '--skip-install',
+        '--yes',
+        '--no-dummy-feature',
+      ]);
+
+      const guidance = {
+        'AGENTS.md': [
+          '# Agent Instructions',
+          '<!-- nest-cqrs:managed:commands:start -->',
+          'Use npm, matching the npm fallback used when no pnpm or Yarn lockfile is present.',
+          '- Unit tests: `npm run test`',
+          'Keep controllers transport-focused',
+          'Add interfaces, tokens, repositories, or layers only when',
+          'explicit transaction boundary',
+          '## Task-end knowledge checkpoint',
+        ],
+        'agents/README.md': [
+          '# AI Project Guidance',
+          'Root [`AGENTS.md`](../AGENTS.md) is the canonical source',
+          'Text inside `nest-cqrs:managed` markers is generator-owned.',
+        ],
+        'agents/ARCHITECTURE.md': [
+          '# Architecture',
+          '<!-- nest-cqrs:managed:architecture:start -->',
+          '- NestJS runs on the Fastify adapter.',
+          '### Request flow and component responsibilities',
+          'Commands and queries describe one use-case intent',
+          'Apply SOLID as design guidance, not as a checklist',
+          '### Persistence and consistency',
+          'must succeed or fail atomically',
+          'No dummy CQRS feature was requested during initialization.',
+        ],
+        'agents/PROJECT_CONTEXT.md': [
+          '# Project Context',
+          'Product-specific context is INCOMPLETE.',
+          '## TODO: Business rules — INCOMPLETE',
+        ],
+        'agents/CODEBASE_MAP.md': [
+          '# Codebase Map',
+          '<!-- nest-cqrs:managed:codebase-map:start -->',
+          '- `src/main.ts` — Fastify bootstrap',
+          "Nest CLI's existing Jest configuration",
+        ],
+        'agents/TESTING.md': [
+          '# Testing Guide',
+          'This project uses Jest.',
+          'Use extensionless relative imports because this is a CommonJS project.',
+          'prove commit and rollback behavior',
+          'Validate migrations against disposable data',
+        ],
+        'agents/knowledge/INDEX.md': [
+          '# Knowledge Index',
+          '## When a knowledge note is appropriate',
+          'No feature or topic notes have been created yet.',
+        ],
+      };
+
+      for (const [path, expectedContent] of Object.entries(guidance)) {
+        const absolutePath = join(root, path);
+        expect(existsSync(absolutePath), `${path} should be generated`).toBe(true);
+        const content = readFileSync(absolutePath, 'utf8');
+        for (const expected of expectedContent) expect(content).toContain(expected);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('verifies the default foundation', () => {
     verifyGeneratedApplication('foundation', ['--no-dummy-feature']);
   });
@@ -187,7 +283,15 @@ describe('generated application acceptance', () => {
   });
 
   it('verifies rate limiting, PostgreSQL migrations, and a generated CQRS feature', () => {
-    verifyGeneratedApplication('postgres', ['--all', '--database', 'postgres', '--dummy-feature', 'examples']);
+    verifyGeneratedApplication(
+      'postgres',
+      ['--all', '--database', 'postgres', '--dummy-feature', 'examples'],
+      false,
+      {
+        'migration:run:prod':
+          'typeorm migration:run -d dist/database/data-source',
+      },
+    );
   });
 
   it('verifies MongoDB without relational migrations', () => {

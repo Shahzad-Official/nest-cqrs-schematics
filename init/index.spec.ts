@@ -114,11 +114,25 @@ describe('init foundation', () => {
     expect(agents).toContain('<!-- nest-cqrs:managed:commands:start -->');
     expect(agents).toContain('Build: `npm run build`');
     expect(agents).not.toContain('migration:run');
+    expect(agents).toContain('Keep controllers transport-focused');
+    expect(agents).toContain('Add interfaces, tokens, repositories, or layers only when');
+    expect(agents).toContain('explicit transaction boundary');
+    expect(agents).toContain('Keep request flow traceable');
     expect(agents).toContain('If no durable knowledge changed, report that');
     expect(agents).toContain('Do not store secrets, raw logs, command transcripts');
 
     const architecture = plan.generated['agents/ARCHITECTURE.md'];
     expect(architecture).toContain('<!-- nest-cqrs:managed:architecture:start -->');
+    expect(architecture).toContain('### Request flow and component responsibilities');
+    expect(architecture).toContain('request validation → controller → command or query bus');
+    expect(architecture).toContain('DTOs define transport shapes and syntactic validation');
+    expect(architecture).toContain('Commands and queries describe one use-case intent');
+    expect(architecture).toContain('Modules own composition');
+    expect(architecture).toContain('Apply SOLID as design guidance, not as a checklist');
+    expect(architecture).toContain('Use narrow interfaces or injection tokens at meaningful replaceable boundaries');
+    expect(architecture).toContain('### Persistence and consistency');
+    expect(architecture).toContain('must succeed or fail atomically');
+    expect(architecture).toContain('review generated SQL before execution');
     expect(architecture).toContain('None were selected during initialization.');
     expect(architecture).not.toContain('### Database');
     expect(architecture).not.toContain('### Migrations');
@@ -261,7 +275,14 @@ describe('init foundation', () => {
     expect(JSON.parse(plan.generated['package.json']).dependencies['@fastify/static']).toBe('^10.0.0');
     expect(plan.generated['tsconfig.json']).toBeUndefined();
     expect(plan.generated['nest-cli.json']).toBeUndefined();
-    expect(JSON.parse(plan.generated['package.json']).scripts.format).toBe('prettier --write "src/**/*.ts" "test/**/*.ts"');
+    const generatedPackage = JSON.parse(plan.generated['package.json']);
+    expect(generatedPackage.scripts.format).toBe('prettier --write "src/**/*.ts" "test/**/*.ts"');
+    expect(generatedPackage.scripts.test).toBe(
+      'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --passWithNoTests',
+    );
+    expect(generatedPackage.scripts['test:e2e']).toBe(
+      'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json',
+    );
     expect(JSON.parse(plan.generated['package.json']).devDependencies).toMatchObject({
       jest: '^30.0.0',
       oxlint: '^1.58.0',
@@ -280,11 +301,19 @@ describe('init foundation', () => {
     expect(plan.generated['test/app.e2e-spec.ts']).toBeUndefined();
     expect(plan.generated['.env.test.example']).toBeUndefined();
     expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiSuccessEnvelope');
+    expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('type?: Type<unknown>');
+    expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('getSchemaPath(options.type)');
     expect(plan.generated['src/common/decorators/api-response.decorator.ts']).toContain('ApiErrorEnvelope');
     expect(plan.generated['src/common/interfaces/api-response.interface.ts']).toContain('@ApiProperty');
     expect(plan.generated['.env.example']).toContain('NODE_ENV="development"');
     expect(plan.generated['.env.example']).toContain('PORT=3000');
     expect(plan.generated['.env.development.example']).toBeUndefined();
+    expect(plan.generated['agents/TESTING.md']).toContain(
+      'prove commit and rollback behavior',
+    );
+    expect(plan.generated['agents/TESTING.md']).toContain(
+      'Validate migrations against disposable data',
+    );
   });
 
   it('matches generated relative imports to the existing project module type', () => {
@@ -299,6 +328,7 @@ describe('init foundation', () => {
     delete packageJson.devDependencies.jest;
     packageJson.devDependencies.vitest = '^4.1.2';
     packageJson.devDependencies['vite-tsconfig-paths'] = '^5.1.4';
+    packageJson.scripts.test = 'vitest run';
     writeFileSync(join(esmRoot, 'package.json'), JSON.stringify(packageJson));
     const esm = buildPlan(esmRoot, '0.1.0');
     expect(esm.generated['src/main.ts']).toContain("from './app.module.js'");
@@ -306,6 +336,9 @@ describe('init foundation', () => {
     expect(esm.generated['src/health/health.controller.spec.ts']).toBeUndefined();
     expect(esm.generated['agents/TESTING.md']).toContain('This project uses Vitest');
     expect(esm.generated['agents/TESTING.md']).toContain('`.js` suffixes');
+    expect(JSON.parse(esm.generated['package.json']).scripts.test).toBe(
+      'vitest run --passWithNoTests',
+    );
 
     const esmDatabase = buildPlan(esmRoot, '0.1.0', undefined, ['database'], {
       type: 'postgres',

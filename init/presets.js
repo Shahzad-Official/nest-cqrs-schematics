@@ -164,7 +164,7 @@ export default new DataSource(options);
       'migration:show': 'typeorm-ts-node-esm migration:show -d src/database/data-source.ts',
       'migration:run': 'typeorm-ts-node-esm migration:run -d src/database/data-source.ts',
       'migration:revert': 'typeorm-ts-node-esm migration:revert -d src/database/data-source.ts',
-      'migration:run:prod': 'typeorm migration:run -d dist/src/database/data-source',
+      'migration:run:prod': 'typeorm migration:run -d dist/database/data-source',
   });
 }
 

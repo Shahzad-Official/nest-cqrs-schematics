@@ -1,7 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-<% if (swagger) { %>import { ApiOperation, ApiTags } from '@nestjs/swagger';
-<% } %>
 <% if (swagger) { %>import { ApiErrorEnvelope, ApiSuccessEnvelope } from '../../../common/decorators/api-response.decorator';
 <% } %>
 import { Create<%= classify(name) %>Command } from '../commands/create-<%= dasherize(name) %>/create-<%= dasherize(name) %>.command';
@@ -12,9 +10,8 @@ import { <%= classify(name) %>ParamsDto } from '../dtos/<%= dasherize(name) %>-p
 import { Update<%= classify(name) %>Dto } from '../dtos/update-<%= dasherize(name) %>.dto';
 import { Get<%= classify(name) %>Query } from '../queries/get-<%= dasherize(name) %>/get-<%= dasherize(name) %>.query';
 import { List<%= classify(feature) %>Query } from '../queries/list-<%= dasherize(feature) %>/list-<%= dasherize(feature) %>.query';
+import { Create<%= classify(name) %>Response, Delete<%= classify(name) %>Response, Get<%= classify(name) %>Response, List<%= classify(feature) %>Response, Update<%= classify(name) %>Response } from '../responses/<%= dasherize(name) %>.responses';
 
-<% if (swagger) { %>@ApiTags('<%= dasherize(feature) %>')
-<% } %>
 @Controller('<%= dasherize(feature) %>')
 export class <%= classify(feature) %>Controller {
   constructor(
@@ -23,51 +20,46 @@ export class <%= classify(feature) %>Controller {
   ) {}
 
   @Post()
-<% if (swagger) { %>  @ApiOperation({ summary: 'Create <%= dasherize(name) %>' })
-  @ApiSuccessEnvelope({ status: 201, description: '<%= classify(name) %> created successfully', data: { type: 'string' } })
+<% if (swagger) { %>  @ApiSuccessEnvelope({ status: 201, description: '<%= classify(name) %> created successfully', type: Create<%= classify(name) %>Response })
   @ApiErrorEnvelope(400, 'Invalid request body')
 <% } %>
-  create(@Body() create<%= classify(name) %>Dto: Create<%= classify(name) %>Dto): Promise<string> {
+  create(@Body() create<%= classify(name) %>Dto: Create<%= classify(name) %>Dto): Promise<Create<%= classify(name) %>Response> {
     return this.commandBus.execute(new Create<%= classify(name) %>Command(create<%= classify(name) %>Dto));
   }
 
   @Get()
-<% if (swagger) { %>  @ApiOperation({ summary: 'List <%= dasherize(feature) %>' })
-  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(feature) %> returned successfully', data: { type: 'string' } })
+<% if (swagger) { %>  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(feature) %> returned successfully', type: List<%= classify(feature) %>Response })
 <% } %>
-  findAll(): Promise<string> {
+  findAll(): Promise<List<%= classify(feature) %>Response> {
     return this.queryBus.execute(new List<%= classify(feature) %>Query());
   }
 
   @Get(':id')
-<% if (swagger) { %>  @ApiOperation({ summary: 'Get <%= dasherize(name) %> by ID' })
-  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> returned successfully', data: { type: 'string' } })
+<% if (swagger) { %>  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> returned successfully', type: Get<%= classify(name) %>Response })
   @ApiErrorEnvelope(400, 'Invalid ID')
 <% } %>
-  findOne(@Param() params: <%= classify(name) %>ParamsDto): Promise<string> {
+  findOne(@Param() params: <%= classify(name) %>ParamsDto): Promise<Get<%= classify(name) %>Response> {
     return this.queryBus.execute(new Get<%= classify(name) %>Query(params.id));
   }
 
   @Patch(':id')
-<% if (swagger) { %>  @ApiOperation({ summary: 'Update <%= dasherize(name) %>' })
-  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> updated successfully', data: { type: 'string' } })
+<% if (swagger) { %>  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> updated successfully', type: Update<%= classify(name) %>Response })
   @ApiErrorEnvelope(400, 'Invalid ID or request body')
 <% } %>
   update(
     @Param() params: <%= classify(name) %>ParamsDto,
     @Body() update<%= classify(name) %>Dto: Update<%= classify(name) %>Dto,
-  ): Promise<string> {
+  ): Promise<Update<%= classify(name) %>Response> {
     return this.commandBus.execute(
       new Update<%= classify(name) %>Command(params.id, update<%= classify(name) %>Dto),
     );
   }
 
   @Delete(':id')
-<% if (swagger) { %>  @ApiOperation({ summary: 'Delete <%= dasherize(name) %>' })
-  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> deleted successfully', data: { type: 'string' } })
+<% if (swagger) { %>  @ApiSuccessEnvelope({ status: 200, description: '<%= classify(name) %> deleted successfully', type: Delete<%= classify(name) %>Response })
   @ApiErrorEnvelope(400, 'Invalid ID')
 <% } %>
-  remove(@Param() params: <%= classify(name) %>ParamsDto): Promise<string> {
+  remove(@Param() params: <%= classify(name) %>ParamsDto): Promise<Delete<%= classify(name) %>Response> {
     return this.commandBus.execute(new Delete<%= classify(name) %>Command(params.id));
   }
 }

@@ -1,11 +1,12 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Delete<%= classify(name) %>Command } from './delete-<%= dasherize(name) %>.command';
+import { Delete<%= classify(name) %>Response } from '../../responses/<%= dasherize(name) %>.responses';
 
 @CommandHandler(Delete<%= classify(name) %>Command)
 export class Delete<%= classify(name) %>Handler
   implements ICommandHandler<Delete<%= classify(name) %>Command>
 {
-  async execute(command: Delete<%= classify(name) %>Command): Promise<string> {
-    return `This action removes a #${command.id} <%= dasherize(name) %>`;
+  async execute(command: Delete<%= classify(name) %>Command): Promise<Delete<%= classify(name) %>Response> {
+    return { message: `This action removes a #${command.id} <%= dasherize(name) %>` };
   }
 }

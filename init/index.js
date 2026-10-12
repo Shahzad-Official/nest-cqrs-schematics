@@ -15,6 +15,15 @@ const addMissing = (existing = {}, additions) => Object.fromEntries([
   ...Object.entries(existing),
 ]);
 
+function allowEmptyTestSuite(packageJson) {
+  const packages = { ...packageJson.dependencies, ...packageJson.devDependencies };
+  const supportedRunner = packages.jest || packages.vitest;
+  const testScript = packageJson.scripts?.test;
+  if (supportedRunner && testScript && !testScript.includes('--passWithNoTests')) {
+    packageJson.scripts.test = `${testScript} --passWithNoTests`;
+  }
+}
+
 function usesEsmImports(root) {
   const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
   if (packageJson.type === 'module') return true;
@@ -67,6 +76,7 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
   packageJson.dependencies = addMissing(packageJson.dependencies, runtimeDependencies);
   delete packageJson.dependencies?.['@nestjs/platform-express'];
   packageJson.devDependencies = addMissing(packageJson.devDependencies, devDependencies);
+  allowEmptyTestSuite(packageJson);
 
   const generated = { ...files };
   const normalizedPresets = new Set(selectedPresets);

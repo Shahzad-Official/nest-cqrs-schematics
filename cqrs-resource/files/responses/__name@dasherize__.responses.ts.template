@@ -1,0 +1,26 @@
+<% if (swagger) { %>import { ApiProperty } from '@nestjs/swagger';
+
+<% } %>export class Create<%= classify(name) %>Response {
+<% if (swagger) { %>  @ApiProperty({ example: 'This action adds a new <%= dasherize(name) %>' })
+<% } %>  message!: string;
+}
+
+export class List<%= classify(feature) %>Response {
+<% if (swagger) { %>  @ApiProperty({ example: 'This action returns all <%= dasherize(feature) %>' })
+<% } %>  message!: string;
+}
+
+export class Get<%= classify(name) %>Response {
+<% if (swagger) { %>  @ApiProperty({ example: 'This action returns a #id <%= dasherize(name) %>' })
+<% } %>  message!: string;
+}
+
+export class Update<%= classify(name) %>Response {
+<% if (swagger) { %>  @ApiProperty({ example: 'This action updates a #id <%= dasherize(name) %>' })
+<% } %>  message!: string;
+}
+
+export class Delete<%= classify(name) %>Response {
+<% if (swagger) { %>  @ApiProperty({ example: 'This action removes a #id <%= dasherize(name) %>' })
+<% } %>  message!: string;
+}

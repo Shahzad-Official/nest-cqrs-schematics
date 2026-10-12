@@ -26,7 +26,7 @@ describe('cqrs-resource schematic', () => {
     });
     const root = '/src/features/stock-items';
 
-    expect(tree.files).toHaveLength(16);
+    expect(tree.files).toHaveLength(17);
     expect(tree.files).toEqual(
       expect.arrayContaining([
         `${root}/stock-items.module.ts`,
@@ -35,6 +35,7 @@ describe('cqrs-resource schematic', () => {
         `${root}/dtos/update-stock-item.dto.ts`,
         `${root}/dtos/stock-item-params.dto.ts`,
         `${root}/entities/stock-item.entity.ts`,
+        `${root}/responses/stock-item.responses.ts`,
         `${root}/commands/create-stock-item/create-stock-item.command.ts`,
         `${root}/commands/create-stock-item/create-stock-item.handler.ts`,
         `${root}/commands/update-stock-item/update-stock-item.command.ts`,
@@ -57,6 +58,14 @@ describe('cqrs-resource schematic', () => {
     expect(controller).toContain('private readonly queryBus: QueryBus');
     expect(controller).toContain('new CreateStockItemCommand(createStockItemDto)');
     expect(controller).toContain("from '../dtos/create-stock-item.dto'");
+    expect(controller).toContain('Promise<CreateStockItemResponse>');
+
+    const responses = tree.readContent(`${root}/responses/stock-item.responses.ts`);
+    expect(responses).toContain('export class CreateStockItemResponse');
+    expect(responses).toContain('export class ListStockItemsResponse');
+    expect(responses).toContain('export class GetStockItemResponse');
+    expect(responses).toContain('export class UpdateStockItemResponse');
+    expect(responses).toContain('export class DeleteStockItemResponse');
 
     const paramsDto = tree.readContent(
       `${root}/dtos/stock-item-params.dto.ts`,
@@ -71,7 +80,7 @@ describe('cqrs-resource schematic', () => {
       spec: true,
     });
 
-    expect(tree.files).toHaveLength(16);
+    expect(tree.files).toHaveLength(17);
     expect(tree.files.some((file) => file.endsWith('.spec.ts'))).toBe(false);
     expect(tree.files).toContain('/src/features/orders/orders.module.ts');
   });
@@ -143,12 +152,16 @@ describe('cqrs-resource schematic', () => {
 
     const controller = tree.readContent('/src/features/orders/controllers/orders.controller.ts');
     const createDto = tree.readContent('/src/features/orders/dtos/create-order.dto.ts');
-    expect(controller).toContain("@ApiTags('orders')");
-    expect(controller).toContain("@ApiOperation({ summary: 'Create order' })");
+    expect(controller).not.toContain('ApiTags');
+    expect(controller).not.toContain('ApiOperation');
     expect(controller).toContain('@ApiSuccessEnvelope({ status: 201');
+    expect(controller).toContain('type: CreateOrderResponse');
     expect(controller).toContain("@ApiErrorEnvelope(400, 'Invalid request body')");
     expect(createDto).toContain("import { ApiProperty } from '@nestjs/swagger'");
     expect(createDto).toContain("@ApiProperty({ example: 'Example' })");
+    expect(tree.readContent('/src/features/orders/responses/order.responses.ts')).toContain(
+      "import { ApiProperty } from '@nestjs/swagger'",
+    );
   });
 
   it('registers a no-CRUD feature without duplicating an existing import', async () => {

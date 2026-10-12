@@ -1,7 +1,8 @@
 import { Command } from '@nestjs/cqrs';
 import { Create<%= classify(name) %>Dto } from '../../dtos/create-<%= dasherize(name) %>.dto';
+import { Create<%= classify(name) %>Response } from '../../responses/<%= dasherize(name) %>.responses';
 
-export class Create<%= classify(name) %>Command extends Command<string> {
+export class Create<%= classify(name) %>Command extends Command<Create<%= classify(name) %>Response> {
   constructor(public readonly create<%= classify(name) %>Dto: Create<%= classify(name) %>Dto) {
     super();
   }
