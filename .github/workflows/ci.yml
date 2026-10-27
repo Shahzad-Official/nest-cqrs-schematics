@@ -9,15 +9,23 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      matrix:
+        package-manager: [npm, pnpm]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        if: matrix.package-manager == 'pnpm'
         with:
           version: 11.25.0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+          cache: ${{ matrix.package-manager }}
+      - run: npm ci --ignore-scripts
+        if: matrix.package-manager == 'npm'
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm test
+        if: matrix.package-manager == 'pnpm'
+      - run: ${{ matrix.package-manager }} test
       - run: pnpm test:acceptance
+        if: matrix.package-manager == 'pnpm'

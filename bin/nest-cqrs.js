@@ -7,7 +7,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { addPresets, initialize } from '../init/index.js';
+import { addPresets, detectPackageManager, initialize } from '../init/index.js';
 import { databaseTypes, presetNames } from '../init/presets.js';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -292,9 +292,11 @@ function assertNestProject() {
   }
 }
 
-function runStandard(options) {
+function runStandard(options, spawn = spawnSync) {
+  const packageManager = detectPackageManager(process.cwd());
   const args = [
     'exec',
+    ...(packageManager === 'npm' ? ['--'] : []),
     'nest',
     'generate',
     'resource',
@@ -303,7 +305,7 @@ function runStandard(options) {
     '--no-spec',
   ];
   if (options.dryRun) args.push('--dry-run');
-  const result = spawnSync('pnpm', args, {
+  const result = spawn(packageManager, args, {
     cwd: process.cwd(),
     stdio: 'inherit',
     shell: false,
@@ -443,7 +445,7 @@ async function main() {
   }
 }
 
-export { generatorAliases, parseArgs, printHelp };
+export { generatorAliases, parseArgs, printHelp, runStandard };
 
 function isExecutableEntry() {
   if (!process.argv[1]) return false;

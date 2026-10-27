@@ -1,4 +1,7 @@
-import { generatorAliases, parseArgs, printHelp } from './nest-cqrs.js';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { generatorAliases, parseArgs, printHelp, runStandard } from './nest-cqrs.js';
 
 describe('nest-cqrs CLI', () => {
   it('prints structured help and its version', () => {
@@ -36,5 +39,45 @@ describe('nest-cqrs CLI', () => {
     expect(generatorAliases.e).toBe('entity');
     expect(generatorAliases.q).toBe('query');
     expect(generatorAliases.c).toBe('command');
+  });
+
+  describe('standard resources', () => {
+    let root: string;
+
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), 'nest-cqrs-cli-'));
+      vi.spyOn(process, 'cwd').mockReturnValue(root);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    it.each([
+      ['npm', 'package-lock.json'],
+      ['pnpm', 'pnpm-lock.yaml'],
+      ['yarn', 'yarn.lock'],
+      ['npm', undefined],
+    ])('uses %s for a project with %s', (packageManager, lockfile) => {
+      if (lockfile) writeFileSync(join(root, lockfile), '');
+      const spawn = vi.fn(() => ({ status: 0 }));
+
+      runStandard({ name: 'orders', crud: true, dryRun: true }, spawn);
+
+      expect(spawn).toHaveBeenCalledWith(packageManager, [
+        'exec',
+        ...(packageManager === 'npm' ? ['--'] : []),
+        'nest', 'generate', 'resource', 'orders', '--crud=true', '--no-spec', '--dry-run',
+      ], { cwd: root, stdio: 'inherit', shell: false });
+    });
+
+    it('preserves spawn and generator failures', () => {
+      const options = { name: 'orders', crud: false };
+      const error = new Error('package manager unavailable');
+      expect(() => runStandard(options, () => ({ error }))).toThrow(error);
+      expect(() => runStandard(options, () => ({ status: 1 })))
+        .toThrow('Nest resource generator exited with status 1.');
+    });
   });
 });

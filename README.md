@@ -41,8 +41,10 @@ receive `.js` suffixes, while CommonJS projects keep extensionless imports.
 
 Install these before starting:
 
-1. A current Node.js LTS release.
-2. A package manager: pnpm, npm, or Yarn.
+1. Node.js 24.15.0 or newer within Node 24 (recommended). The dependencies also
+   support Node `^22.22.3` and `>=26.0.0`; Node 25 is not supported. This repository's
+   `.nvmrc` selects Node 24. If you use nvm, run `nvm install` and `nvm use` here.
+2. npm or pnpm. npm is included with Node.js; pnpm must be installed separately.
 3. The Nest CLI:
 
    ```bash
@@ -55,32 +57,65 @@ Install these before starting:
    nest --version
    ```
 
-The examples below use pnpm, but generated projects also support npm and Yarn. The initializer detects the project package manager from its lockfile. If it finds neither `pnpm-lock.yaml` nor `yarn.lock`, it uses npm.
+The generator repository supports both npm and pnpm; choose one setup below.
+Generated projects also support Yarn. Initialization,
+preset installation, and standard resource generation detect the target project's
+package manager from its lockfile. If neither `pnpm-lock.yaml` nor `yarn.lock`
+exists, they use npm. The generator's own package manager does not determine the
+target project's package manager.
 
 ## Install this generator locally
 
 This package is currently marked private, so use it from a local checkout rather than trying to install it from the public npm registry.
 
-Clone or open this repository, then install its dependencies:
+Clone or open this repository, then choose one setup below.
+
+If you use nvm, select the repository's Node version before installing:
 
 ```bash
 cd /path/to/nest-cqrs-schematics
-pnpm install
+nvm install
+nvm use
 ```
 
-Link its `nest-cqrs` command globally:
+### With npm
 
 ```bash
-pnpm link --global
-```
-
-Verify the command:
-
-```bash
+cd /path/to/nest-cqrs-schematics
+npm ci
+npm link
 nest-cqrs --help
 ```
 
-If you do not want a global link, invoke the executable directly:
+`npm ci` installs this generator's dependencies from `package-lock.json` into
+its local `node_modules`. It does not register the `nest-cqrs` command globally
+or initialize a Nest application. `npm link` registers the command; run it once
+after installation, without `--global`. No build step is needed.
+
+`npm install` (or `npm i`) also works, and is used when updating dependencies.
+After cloning this repository on another machine, use `npm ci` again, then
+`npm link` if you want the global command on that machine.
+
+### With pnpm
+
+```bash
+cd /path/to/nest-cqrs-schematics
+pnpm install --frozen-lockfile
+pnpm add --global .
+nest-cqrs --help
+```
+
+`pnpm install --frozen-lockfile` installs this generator's dependencies from
+`pnpm-lock.yaml`. `pnpm install` also works when updating dependencies. With
+pnpm 11, `pnpm add --global .` registers the command globally.
+
+With pnpm 10, use `pnpm link --global` instead. If pnpm reports that its global
+bin directory is missing, run `pnpm setup` and reopen your terminal first.
+
+### Use without global registration
+
+After `npm ci` or `pnpm install --frozen-lockfile`, you can invoke the executable
+directly from any Nest project:
 
 ```bash
 node /path/to/nest-cqrs-schematics/bin/nest-cqrs.js --help
@@ -88,16 +123,62 @@ node /path/to/nest-cqrs-schematics/bin/nest-cqrs.js --help
 
 Use that full `node .../bin/nest-cqrs.js` command in place of `nest-cqrs` in the examples below.
 
+### Install as a dependency inside a Nest project
+
+To keep the generator in a Nest project's `devDependencies`, first create a
+local package archive from this repository:
+
+```bash
+cd /path/to/nest-cqrs-schematics
+npm pack
+```
+
+This creates `retail-pos-schematics-0.1.0.tgz`. From your existing Nest project's
+root, choose the matching package manager:
+
+| Task | npm | pnpm |
+|---|---|---|
+| Install the generator | `npm install --save-dev /path/to/nest-cqrs-schematics/retail-pos-schematics-0.1.0.tgz` | `pnpm add --save-dev /path/to/nest-cqrs-schematics/retail-pos-schematics-0.1.0.tgz` |
+| Show help | `npx nest-cqrs --help` | `pnpm exec nest-cqrs --help` |
+| Initialize the project | `npx nest-cqrs init` | `pnpm exec nest-cqrs init` |
+
+No global registration is needed for this option. Use `npx nest-cqrs` or
+`pnpm exec nest-cqrs` in place of `nest-cqrs` in the remaining examples.
+The dependency and its archive location are saved in the target project's
+`package.json` and lockfile. Keep the archive available at that location for
+future installations and on other machines, or use a shared archive location.
+The package cannot be published with the current `"private": true` setting.
+
+### Lockfiles and switching package managers
+
+Both `package-lock.json` and `pnpm-lock.yaml` are kept in the repository. Use one
+package manager per checkout's `node_modules`. When switching managers, remove
+only `node_modules` first, then run `npm ci` or `pnpm install --frozen-lockfile`.
+Keep both lockfiles. When changing dependencies, update both with
+`npm install --package-lock-only` and `pnpm install --lockfile-only`.
+
 ## Quick start
 
 ### 1. Create a new NestJS project
 
-Run the Nest CLI outside this generator repository:
+Run the Nest CLI outside this generator repository. Choose one:
+
+npm:
+
+```bash
+nest new my-api --package-manager npm
+cd my-api
+```
+
+pnpm:
 
 ```bash
 nest new my-api --package-manager pnpm
 cd my-api
 ```
+
+The Nest CLI installs the new project's starter dependencies with the selected
+package manager.
 
 The initializer expects to find these files in the current directory:
 
@@ -117,6 +198,13 @@ From the root of the newly created Nest project, run:
 nest-cqrs init
 ```
 
+The initializer adds the foundation's required packages to the Nest project's
+`package.json`, then runs `npm install` or `pnpm install` in that project based
+on its lockfile. It also runs formatting after installation. You do not need to
+install those generated dependencies separately. `--skip-install` generates
+files without installing or formatting; install dependencies manually afterward
+with your project's package manager.
+
 The interactive prompts let you choose:
 
 - a database integration;
@@ -135,9 +223,9 @@ Update the values before starting the application. Do not commit real secrets.
 
 ### 3. Start the application
 
-```bash
-pnpm start:dev
-```
+| npm | pnpm |
+|---|---|
+| `npm run start:dev` | `pnpm start:dev` |
 
 The generated health endpoints use the configured API prefix. With the example configuration, they are available at:
 
@@ -361,19 +449,19 @@ the optional `unique` modifier for a unique column.
 
 Initialization preserves and uses the scripts already supplied by the Nest CLI starter, such as:
 
-```bash
-pnpm build
-pnpm format
-pnpm lint
-pnpm test
-pnpm test:watch
-pnpm test:cov
-pnpm test:e2e
-pnpm start
-pnpm start:dev
-pnpm start:debug
-pnpm start:prod
-```
+| Task | npm | pnpm |
+|---|---|---|
+| Build | `npm run build` | `pnpm build` |
+| Format | `npm run format` | `pnpm format` |
+| Lint | `npm run lint` | `pnpm lint` |
+| Unit tests | `npm test` | `pnpm test` |
+| Watch tests | `npm run test:watch` | `pnpm test:watch` |
+| Test coverage | `npm run test:cov` | `pnpm test:cov` |
+| E2E tests | `npm run test:e2e` | `pnpm test:e2e` |
+| Start | `npm start` | `pnpm start` |
+| Start with watch | `npm run start:dev` | `pnpm start:dev` |
+| Start with debugger | `npm run start:debug` | `pnpm start:debug` |
+| Start production build | `npm run start:prod` | `pnpm start:prod` |
 
 The existing format script is used after dependency installation when test source files remain. When initialization removes the obsolete Nest starter tests and no test sources remain, the initializer runs the existing Prettier executable against `src/**/*.ts` directly so the starter script's unmatched `test/**/*.ts` glob cannot fail. Dry runs and operations using `--skip-install` do not run formatting.
 
@@ -385,16 +473,17 @@ are unchanged.
 
 When migrations are enabled, the project also receives:
 
-```bash
-pnpm migration:create
-pnpm migration:generate
-pnpm migration:show
-pnpm migration:run
-pnpm migration:revert
-pnpm migration:run:prod
-```
+| npm | pnpm |
+|---|---|
+| `npm run migration:create` | `pnpm migration:create` |
+| `npm run migration:generate` | `pnpm migration:generate` |
+| `npm run migration:show` | `pnpm migration:show` |
+| `npm run migration:run` | `pnpm migration:run` |
+| `npm run migration:revert` | `pnpm migration:revert` |
+| `npm run migration:run:prod` | `pnpm migration:run:prod` |
 
-Replace `pnpm` with `npm run` or `yarn` when using another package manager.
+Use only scripts present in your generated project's `package.json`. For Yarn,
+use `yarn <script>`.
 
 The foundation generates one focused unit test for its HTTP logging policy. It does not generate feature, E2E, or database-integration placeholder tests and does not add test scripts. The generated `agents/TESTING.md` records the detected runner and module format so an AI agent can add deliberate, compatible tests when requested.
 
@@ -479,6 +568,18 @@ nest-cqrs --help
 
 ## Common problems
 
+### `EBADENGINE` during installation
+
+Check `node --version`. Node 25 does not satisfy the installed Angular DevKit and
+Nest schematics engine requirements. Switch to the supported Node version above
+(with nvm: `nvm install` then `nvm use` in this repository), then reinstall using
+your chosen package manager. Do not suppress the warning with `--force`.
+
+### `ELINKGLOBAL: link should never be --global`
+
+From this generator repository, use `npm link`, without `--global`. npm and pnpm
+use different commands for global registration; follow the matching setup above.
+
 ### “Run nest-cqrs from the root of a Nest project”
 
 Change into the directory created by `nest new`. Confirm that `package.json`, `nest-cli.json`, and `tsconfig.json` are present.
@@ -499,19 +600,45 @@ Check `DB_TYPE`, host, port, credentials, database name, and SSL setting in the 
 
 Run the generated format command directly to see the formatter output:
 
-```bash
-pnpm format
-```
+| npm | pnpm |
+|---|---|
+| `npm run format` | `pnpm format` |
 
 Fix the reported issue, then use `nest-cqrs init --resume` if initialization is still pending.
 
 ## Developing this generator
 
-Install dependencies and run the test suite:
+Install dependencies and run the test suite with either package manager:
 
 ```bash
-pnpm install
+npm ci
+npm test
+```
+
+Or:
+
+```bash
+pnpm install --frozen-lockfile
 pnpm test
 ```
 
+CI installs and runs the unit suite with both npm and pnpm on Node 24. The
+generated-application acceptance suite runs in the pnpm job.
+
 The tests cover foundation generation, optional presets, resource generation, dry runs, collisions, recovery, managed guidance updates, and formatting behavior.
+
+### Remove previously tracked dependencies from Git
+
+`.gitignore` prevents new dependency files from being tracked; it does not
+untrack files already committed. From this repository's root, remove only
+`node_modules` from Git's index:
+
+```bash
+git rm -r --cached -- node_modules
+git add .gitignore
+```
+
+`--cached` preserves the local files. Git stages their removal from the
+repository; commit those removals together with `.gitignore`. Keep both
+`package-lock.json` and `pnpm-lock.yaml` tracked so other machines can install
+dependencies with `npm ci` or `pnpm install --frozen-lockfile`.
