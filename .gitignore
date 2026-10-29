@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Generated images and downloadable bundles
+/output/
