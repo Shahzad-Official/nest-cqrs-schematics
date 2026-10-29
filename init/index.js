@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { devDependencies, files, FOUNDATION_VERSION, removableDefaultFiles, runtimeDependencies } from './foundation.js';
-import { GUIDANCE_FOUNDATION_VERSION, managedBlocks, renderGuidanceFiles, replaceManagedBlock } from './guidance.js';
+import { GUIDANCE_FOUNDATION_VERSION, LEGACY_GUIDANCE_FOUNDATION_VERSION, legacyManagedBlocks, managedBlocks, mergeGuidanceFooter, renderGuidanceFiles, renderLegacyGuidanceFiles, replaceManagedBlock } from './guidance.js';
 import { applyPresets, PRESET_VERSION, presetNames } from './presets.js';
 
 const manifestPath = '.nest-cqrs.json';
@@ -69,6 +69,24 @@ export function ensureGitignore(root, dryRun = false) {
   return true;
 }
 
+function readGuidanceSource(root, path) {
+  const parts = path.split('/');
+  for (let index = 0; index < parts.length; index += 1) {
+    let stat;
+    try {
+      stat = lstatSync(resolve(root, ...parts.slice(0, index + 1)));
+    } catch (error) {
+      if (error.code === 'ENOENT') return undefined;
+      throw error;
+    }
+    const validType = index === parts.length - 1 ? stat.isFile() : stat.isDirectory();
+    if (stat.isSymbolicLink() || !validType) {
+      throw new Error(`Refusing to update guidance through a symlink or non-regular path: ${path}`);
+    }
+  }
+  return readFileSync(resolve(root, path), 'utf8');
+}
+
 export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = [], databaseOptions = {}) {
   const packagePath = resolve(root, 'package.json');
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
@@ -89,14 +107,18 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
     migrations: databaseOptions.migrations,
   });
   applyImportStyle(generated, esm);
-  Object.assign(generated, renderGuidanceFiles({
+  const guidance = renderGuidanceFiles({
     packageManager: detectPackageManager(root),
     packageJson,
     selectedPresets: appliedPresets,
     databaseType: databaseOptions.type,
     dummyFeature,
     esm,
-  }));
+  });
+  for (const [path, content] of Object.entries(guidance)) {
+    const current = readGuidanceSource(root, path);
+    generated[path] = current === undefined ? content : mergeGuidanceFooter(current, content, managedBlocks[path], path);
+  }
   generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
 
   const manifest = {
@@ -140,14 +162,18 @@ export function applyPlan(root, plan, dryRun) {
   // leave a half-applied foundation.
   for (const path of Object.keys(plan.generated)) {
     const absolute = resolve(root, path);
-    if (existsSync(absolute) && !replaceable.includes(path)) {
+    if (Object.hasOwn(managedBlocks, path)) readGuidanceSource(root, path);
+    else if (existsSync(absolute) && !replaceable.includes(path)) {
       throw new Error(`Refusing to overwrite existing file: ${path}`);
     }
   }
 
   for (const [path, content] of Object.entries(plan.generated)) {
     const absolute = resolve(root, path);
-    operations.push(`${existsSync(absolute) ? 'UPDATE' : 'CREATE'} ${path}`);
+    const current = Object.hasOwn(managedBlocks, path) ? readGuidanceSource(root, path) : undefined;
+    const operation = current !== undefined && !current.includes('<!-- nest-cqrs:managed:')
+      ? 'APPEND' : existsSync(absolute) ? 'UPDATE' : 'CREATE';
+    operations.push(`${operation} ${path}`);
     if (!dryRun) {
       mkdirSync(dirname(absolute), { recursive: true });
       writeFileSync(absolute, content);
@@ -354,14 +380,16 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
   });
   applyImportStyle(generated, usesEsmImports(root));
   generated['package.json'] = `${JSON.stringify(packageJson, null, 2)}\n`;
-  if (manifest.foundation?.version >= GUIDANCE_FOUNDATION_VERSION) {
+  const appendedGuidance = new Set();
+  if (manifest.foundation?.version >= LEGACY_GUIDANCE_FOUNDATION_VERSION) {
+    const legacy = manifest.foundation.version < GUIDANCE_FOUNDATION_VERSION;
     const selectedPresets = [...new Set([
       ...Object.entries(manifest.presets ?? {})
         .filter(([, preset]) => preset?.status === 'complete')
         .map(([name]) => name),
       ...applied,
     ])];
-    const desiredGuidance = renderGuidanceFiles({
+    const desiredGuidance = (legacy ? renderLegacyGuidanceFiles : renderGuidanceFiles)({
       packageManager: detectPackageManager(root),
       packageJson,
       selectedPresets,
@@ -369,14 +397,15 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
       dummyFeature: manifest.foundation.starterFeature,
       esm: usesEsmImports(root),
     });
-    for (const [path, block] of Object.entries(managedBlocks)) {
-      const absolute = resolve(root, path);
-      if (!existsSync(absolute)) {
+    for (const [path, block] of Object.entries(legacy ? legacyManagedBlocks : managedBlocks)) {
+      const current = readGuidanceSource(root, path);
+      if (current === undefined) {
         throw new Error(`Cannot update ${path}: managed guidance file is missing.`);
       }
       originalPaths.add(path);
-      const current = readFileSync(absolute, 'utf8');
-      const updated = replaceManagedBlock(current, desiredGuidance[path], block, path);
+      if (legacy) replaceManagedBlock(current, desiredGuidance[path], block, path);
+      if (!current.includes('<!-- nest-cqrs:managed:')) appendedGuidance.add(path);
+      const updated = mergeGuidanceFooter(current, desiredGuidance[path], block, path);
       if (updated !== current) generated[path] = updated;
     }
   }
@@ -387,7 +416,7 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
     const absolute = resolve(root, path);
     const existed = existsSync(absolute);
     if (!dryRun) { mkdirSync(dirname(absolute), { recursive: true }); writeFileSync(absolute, content); }
-    return `${existed ? 'UPDATE' : 'CREATE'} ${path}`;
+    return `${appendedGuidance.has(path) ? 'APPEND' : existed ? 'UPDATE' : 'CREATE'} ${path}`;
   });
   const gitignoreExisted = existsSync(resolve(root, '.gitignore'));
   if (ensureGitignore(root, dryRun)) {

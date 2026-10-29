@@ -22,7 +22,7 @@ The initializer configures:
 - consistent success and error responses;
 - health checks;
 - Swagger/OpenAPI support controlled by configuration;
-- coding-agent guidance in `AGENTS.md` and `agents/`, including project-aware testing rules;
+- coding-agent guidance in `AGENTS.md` and `.agents/`, including project-aware testing rules;
 - optional database, migration, and rate-limit integrations.
 
 The initializer preserves the Nest CLI starter's scripts, Jest/Vitest, Oxlint, and Prettier
@@ -36,6 +36,67 @@ presets.
 For Fastify Swagger UI, this includes the required `@fastify/static` runtime plugin.
 Generated relative imports follow the existing project module type: ESM projects
 receive `.js` suffixes, while CommonJS projects keep extensionless imports.
+
+## Agent guidance and existing files
+
+The guidance layout follows ContextRivet's project, instructions, and knowledge
+folders. New projects receive:
+
+```text
+AGENTS.md                         Nest CQRS context routing
+.agents/
+  PROJECT.md                      product context and detected project commands
+  ARCHITECTURE.md                  generated foundation and selected integrations
+  CODEBASE_MAP.md                  generated entry points and directories
+  README.md                       guidance ownership and maintenance
+  instructions/
+    bootstrap.md                  complete unknown product context
+    engineering.md                implementation and verification rules
+    stack.md                      NestJS and CQRS conventions
+    testing.md                    existing runner and module format
+    workflow.md                   task workflow and durable knowledge
+    code-intelligence.md          conditional code investigation guidance
+  knowledge/
+    INDEX.md                      navigation to relevant feature notes
+    decisions.md                  accepted decisions and evidence
+  templates/
+    feature.md                    template for actual feature knowledge
+```
+
+When a guidance file already exists, initialization preserves its existing
+content and appends a clearly labelled **Nest CQRS generated guidance** section
+at the bottom. The section is enclosed in markers such as:
+
+```markdown
+<!-- nest-cqrs:managed:guidance:start -->
+## Nest CQRS generated guidance
+
+...generated context routing...
+<!-- nest-cqrs:managed:guidance:end -->
+```
+
+Each file has its own named block. Later preset additions update only that
+generator-owned block, keeping it at the bottom even if custom text was added
+after it. Text outside the markers is preserved byte-for-byte; place custom
+instructions, product details, and knowledge entries outside the generated block.
+Missing or malformed marker pairs are never repaired by guessing: partial,
+duplicate, reversed, or nested Nest CQRS markers cause the operation to stop
+before preset files are written. A file with no Nest CQRS markers receives a new
+footer. Existing ContextRivet markers and canonical routing are preserved.
+
+New `PROJECT.md` product fields start pending; scaffold facts and architecture
+are supplied separately. Existing project readiness status and completed product
+context are preserved. The generator does not install skills, register with
+ContextRivet, or change its metadata, backups, or agent-specific configuration.
+Each tool retains its own update and ownership rules.
+
+Previously initialized projects with the older `agents/` layout keep their
+original paths when presets are added. Their existing managed blocks are updated
+as footers; there is no automatic folder migration or deletion of custom files.
+
+Preview guidance changes together with application changes using
+`nest-cqrs init --dry-run` or `nest-cqrs add <preset> --dry-run`. Existing guidance
+without a generated block is reported as `APPEND`; existing blocks as `UPDATE`.
 
 ## Prerequisites
 
@@ -64,11 +125,55 @@ package manager from its lockfile. If neither `pnpm-lock.yaml` nor `yarn.lock`
 exists, they use npm. The generator's own package manager does not determine the
 target project's package manager.
 
-## Install this generator locally
+## Install this generator
 
-This package is currently marked private, so use it from a local checkout rather than trying to install it from the public npm registry.
+This package is currently marked private in `package.json`, so installation uses
+the GitHub source rather than the public npm registry. On macOS or Linux, choose
+the one-command download below or install from your own checkout.
 
-Clone or open this repository, then choose one setup below.
+### One-command installation (no manual clone)
+
+Install a supported Node.js and npm or pnpm first. Node 24.15+ within Node 24 is
+recommended. With nvm and no checkout, use `nvm install 24` and `nvm use 24`.
+
+For npm, paste this command into your terminal from any directory:
+
+```bash
+sh -c 'installer=$(curl -fsSL https://raw.githubusercontent.com/Shahzad-Official/nest-cqrs-schematics/main/install.sh) && [ -n "$installer" ] && printf "%s\n" "$installer" | sh -s -- npm'
+```
+
+For pnpm:
+
+```bash
+sh -c 'installer=$(curl -fsSL https://raw.githubusercontent.com/Shahzad-Official/nest-cqrs-schematics/main/install.sh) && [ -n "$installer" ] && printf "%s\n" "$installer" | sh -s -- pnpm'
+```
+
+The command downloads the installer completely before running it. The installer
+then downloads a GitHub source archive, installs locked dependencies, and
+registers `nest-cqrs` globally. Git is not required, and your current directory
+and any Nest project in it are left unchanged. GitHub archives contain a source
+snapshot rather than Git history. [GitHub archive documentation](https://docs.github.com/en/repositories/working-with-files/using-files/downloading-source-code-archives)
+
+Installed files stay under
+`${XDG_DATA_HOME:-$HOME/.local/share}/nest-cqrs-schematics/install.XXXXXX/source`.
+This persistent copy is needed by the global command. The installer prints the
+exact source and log paths, keeps terminal output short on success, and shows
+the captured error log on failure. Reinstalling creates a separate copy and
+registers the command again; existing copies and user files are preserved.
+
+These anonymous download commands require public access to the installer and
+archive. Maintainers must commit and push `install.sh`, the application files,
+and both lockfiles to `main` before sharing the commands. Private repositories
+need authenticated access; use an authenticated checkout with the local setup
+below instead.
+
+After installation, run `nest-cqrs --help`, then run `nest-cqrs init` inside an
+existing Nest project. The download installer does not initialize or launch an
+application automatically.
+
+### Setup from your own checkout
+
+Clone or open this repository to work from your own source copy.
 
 If you use nvm, select the repository's Node version before installing:
 
@@ -78,7 +183,51 @@ nvm install
 nvm use
 ```
 
-### With npm
+#### Automatic checkout setup
+
+On macOS or Linux, run one command from the cloned generator repository:
+
+```bash
+./install.sh
+```
+
+This defaults to npm. To use pnpm instead:
+
+```bash
+./install.sh pnpm
+```
+
+The installer checks that Node.js and the selected package manager are available,
+installs dependencies from that manager's lockfile with strict Node engine
+checks, and registers `nest-cqrs` globally. It uses `npm link` for npm, `pnpm link
+--global` for pnpm 10, and `pnpm add --global .` for pnpm 11 and newer. These are
+the respective package managers' documented registration commands:
+[npm linking](https://docs.npmjs.com/cli/v11/commands/npm-link/) and
+[pnpm global registration](https://pnpm.io/cli/link#add-a-binary-globally).
+
+Node.js and your selected package manager must already be installed. Unsupported
+Node versions stop installation; with nvm, use `nvm install` and `nvm use` above.
+If pnpm's global command directory is not configured, run `pnpm setup`, reopen
+the terminal, then rerun `./install.sh pnpm`. If a global command directory is
+missing from `PATH`, the installer prints the directory to add.
+
+The installer operates in its own checkout, even when called from another
+directory with `sh /path/to/nest-cqrs-schematics/install.sh`. It does not install
+Node.js, change shell configuration, initialize a Nest project, or start an
+application. `npm ci` alone continues to install dependencies only; global
+registration happens when you explicitly run this installer or the manual link
+command below.
+
+After installation, verify manually:
+
+```bash
+nest-cqrs --help
+```
+
+Then follow [Quick start](#quick-start) to create or enter a Nest project and run
+`nest-cqrs init`. Use `./install.sh --help` for installer usage.
+
+#### Manual setup with npm
 
 ```bash
 cd /path/to/nest-cqrs-schematics
@@ -96,7 +245,7 @@ after installation, without `--global`. No build step is needed.
 After cloning this repository on another machine, use `npm ci` again, then
 `npm link` if you want the global command on that machine.
 
-### With pnpm
+#### Manual setup with pnpm
 
 ```bash
 cd /path/to/nest-cqrs-schematics
@@ -303,7 +452,11 @@ Use a dry run to see the planned file operations without writing anything:
 nest-cqrs init --dry-run
 ```
 
-The initializer collision-checks its complete plan before its first write. It refuses to overwrite existing non-replaceable files, including an existing `AGENTS.md` or generated `agents/` guidance file.
+The initializer checks its complete plan before its first write. Existing agent
+guidance receives a marked footer as described above. Collisions with other
+non-replaceable files still stop initialization before any application files are
+written. Guidance paths must be regular files and directories; symlinks are
+rejected rather than followed.
 
 ## Optional presets
 
@@ -357,7 +510,11 @@ Preview any preset addition with `--dry-run`:
 nest-cqrs add rate-limit --dry-run
 ```
 
-For projects created by the current initializer, `nest-cqrs add` also refreshes the generator-managed sections of `AGENTS.md`, `agents/ARCHITECTURE.md`, and `agents/CODEBASE_MAP.md`. Text outside the managed markers is preserved.
+For projects created by the current initializer, `nest-cqrs add` refreshes the
+generated footer in `.agents/PROJECT.md`, `.agents/ARCHITECTURE.md`, and
+`.agents/CODEBASE_MAP.md` when commands, integrations, or paths change. Other
+guidance footers are retained or updated as needed; existing content outside
+the Nest CQRS markers is preserved.
 
 ## Generate application resources
 
@@ -381,7 +538,7 @@ This creates a feature-first structure under:
 src/features/orders/
 ```
 
-It includes the feature module, controller, request DTOs, endpoint-specific response DTOs, entity, commands, queries, and handlers. The feature module is registered in the nearest Nest module. Tests are intentionally not generated; `agents/TESTING.md` guides coding agents when tests are requested later.
+It includes the feature module, controller, request DTOs, endpoint-specific response DTOs, entity, commands, queries, and handlers. The feature module is registered in the nearest Nest module. Tests are intentionally not generated; `.agents/instructions/testing.md` guides coding agents when tests are requested later.
 
 Success response contracts live in the feature's `responses/` directory. Each generated endpoint uses its own named response class in the controller, CQRS command or query, handler return type, and Swagger envelope schema. Swagger derives controller grouping automatically; the generator does not add `@ApiTags` or repetitive `@ApiOperation` summaries.
 
@@ -485,7 +642,7 @@ When migrations are enabled, the project also receives:
 Use only scripts present in your generated project's `package.json`. For Yarn,
 use `yarn <script>`.
 
-The foundation generates one focused unit test for its HTTP logging policy. It does not generate feature, E2E, or database-integration placeholder tests and does not add test scripts. The generated `agents/TESTING.md` records the detected runner and module format so an AI agent can add deliberate, compatible tests when requested.
+The foundation generates one focused unit test for its HTTP logging policy. It does not generate feature, E2E, or database-integration placeholder tests and does not add test scripts. The generated `.agents/instructions/testing.md` records the detected runner and module format so an AI agent can add deliberate, compatible tests when requested.
 
 ## Environment configuration
 

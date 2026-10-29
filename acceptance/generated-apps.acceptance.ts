@@ -214,21 +214,18 @@ describe('generated application acceptance', () => {
       const guidance = {
         'AGENTS.md': [
           '# Agent Instructions',
-          '<!-- nest-cqrs:managed:commands:start -->',
-          'Use npm, matching the npm fallback used when no pnpm or Yarn lockfile is present.',
-          '- Unit tests: `npm run test`',
-          'Keep controllers transport-focused',
-          'Add interfaces, tokens, repositories, or layers only when',
-          'explicit transaction boundary',
-          '## Task-end knowledge checkpoint',
+          '<!-- nest-cqrs:managed:guidance:start -->',
+          'Follow existing canonical instructions',
+          '.agents/instructions/engineering.md',
+          '.agents/instructions/workflow.md',
         ],
-        'agents/README.md': [
+        '.agents/README.md': [
           '# AI Project Guidance',
-          'Root [`AGENTS.md`](../AGENTS.md) is the canonical source',
+          'This layout follows ContextRivet',
           'Text inside `nest-cqrs:managed` markers is generator-owned.',
         ],
-        'agents/ARCHITECTURE.md': [
-          '# Architecture',
+        '.agents/ARCHITECTURE.md': [
+          '# Project architecture',
           '<!-- nest-cqrs:managed:architecture:start -->',
           '- NestJS runs on the Fastify adapter.',
           '### Request flow and component responsibilities',
@@ -238,29 +235,38 @@ describe('generated application acceptance', () => {
           'must succeed or fail atomically',
           'No dummy CQRS feature was requested during initialization.',
         ],
-        'agents/PROJECT_CONTEXT.md': [
-          '# Project Context',
+        '.agents/PROJECT.md': [
+          '# Project context',
+          'Status: pending',
           'Product-specific context is INCOMPLETE.',
-          '## TODO: Business rules — INCOMPLETE',
+          'Use npm, matching the npm fallback used when no pnpm or Yarn lockfile is present.',
+          '- Unit tests: `npm run test`',
         ],
-        'agents/CODEBASE_MAP.md': [
+        '.agents/CODEBASE_MAP.md': [
           '# Codebase Map',
           '<!-- nest-cqrs:managed:codebase-map:start -->',
           '- `src/main.ts` — Fastify bootstrap',
           "Nest CLI's existing Jest configuration",
         ],
-        'agents/TESTING.md': [
+        '.agents/instructions/testing.md': [
           '# Testing Guide',
           'This project uses Jest.',
           'Use extensionless relative imports because this is a CommonJS project.',
           'prove commit and rollback behavior',
           'Validate migrations against disposable data',
         ],
-        'agents/knowledge/INDEX.md': [
-          '# Knowledge Index',
-          '## When a knowledge note is appropriate',
-          'No feature or topic notes have been created yet.',
+        '.agents/knowledge/INDEX.md': [
+          '# Knowledge index',
+          '### When a knowledge note is appropriate',
+          'No feature or topic notes have been created by the generator.',
         ],
+        '.agents/instructions/bootstrap.md': ['# Complete project context', 'Preserve any existing ContextRivet readiness gate'],
+        '.agents/instructions/engineering.md': ['Keep controllers transport-focused', 'explicit transaction boundary'],
+        '.agents/instructions/stack.md': ['# NestJS stack conventions', 'Joi-validated configuration'],
+        '.agents/instructions/workflow.md': ['### Task-end knowledge checkpoint', 'Do not store secrets'],
+        '.agents/instructions/code-intelligence.md': ['# Code investigation', 'targeted source searches'],
+        '.agents/knowledge/decisions.md': ['# Accepted decisions', 'explicit user agreement'],
+        '.agents/templates/feature.md': ['# Feature knowledge template', 'Evidence status: observed / accepted / unverified', '## Open questions'],
       };
 
       for (const [path, expectedContent] of Object.entries(guidance)) {

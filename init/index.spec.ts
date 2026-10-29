@@ -1,7 +1,8 @@
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { addPresets, approvePnpmBuilds, applyPlan, buildPlan, ensureGitignore, initialize, preflight } from './index.js';
+import { managedBlocks, renderLegacyGuidanceFiles } from './guidance.js';
 
 function project(): string {
   const root = mkdtempSync(join(tmpdir(), 'nest-cqrs-init-'));
@@ -88,40 +89,48 @@ describe('init foundation', () => {
 
   it('generates the complete canonical AI guidance hierarchy for the default foundation', () => {
     const plan = buildPlan(project(), '0.1.0');
-    const guidancePaths = Object.keys(plan.generated).filter((path) => path === 'AGENTS.md' || path.startsWith('agents/'));
+    const guidancePaths = Object.keys(plan.generated).filter((path) => path === 'AGENTS.md' || path.startsWith('.agents/'));
 
     expect(guidancePaths.sort()).toEqual([
+      '.agents/ARCHITECTURE.md',
+      '.agents/CODEBASE_MAP.md',
+      '.agents/PROJECT.md',
+      '.agents/README.md',
+      '.agents/instructions/bootstrap.md',
+      '.agents/instructions/code-intelligence.md',
+      '.agents/instructions/engineering.md',
+      '.agents/instructions/stack.md',
+      '.agents/instructions/testing.md',
+      '.agents/instructions/workflow.md',
+      '.agents/knowledge/INDEX.md',
+      '.agents/knowledge/decisions.md',
+      '.agents/templates/feature.md',
       'AGENTS.md',
-      'agents/ARCHITECTURE.md',
-      'agents/CODEBASE_MAP.md',
-      'agents/PROJECT_CONTEXT.md',
-      'agents/README.md',
-      'agents/TESTING.md',
-      'agents/knowledge/INDEX.md',
     ]);
     expect(Object.keys(plan.generated).some((path) => path.startsWith('docs/'))).toBe(false);
     expect(Object.keys(plan.generated).some((path) => path.startsWith('ai/'))).toBe(false);
     expect(Object.keys(plan.generated).some((path) => /(?:^|\/)SKILL\.md$/.test(path))).toBe(false);
 
     const agents = plan.generated['AGENTS.md'];
-    expect(agents).toContain('canonical source of coding-agent rules');
+    expect(agents).toContain('Follow existing canonical instructions');
     expect(agents).toContain('Agent support for automatically discovering this file varies');
-    expect(agents).toContain('agents/ARCHITECTURE.md');
-    expect(agents).toContain('agents/PROJECT_CONTEXT.md');
-    expect(agents).toContain('agents/CODEBASE_MAP.md');
-    expect(agents).toContain('agents/TESTING.md');
-    expect(agents).toContain('agents/knowledge/INDEX.md');
-    expect(agents).toContain('<!-- nest-cqrs:managed:commands:start -->');
-    expect(agents).toContain('Build: `npm run build`');
+    expect(agents).toContain('.agents/ARCHITECTURE.md');
+    expect(agents).toContain('.agents/PROJECT.md');
+    expect(agents).toContain('.agents/CODEBASE_MAP.md');
+    expect(agents).toContain('.agents/instructions/testing.md');
+    expect(agents).toContain('.agents/knowledge/INDEX.md');
+    expect(agents).toContain('<!-- nest-cqrs:managed:guidance:start -->');
     expect(agents).not.toContain('migration:run');
-    expect(agents).toContain('Keep controllers transport-focused');
-    expect(agents).toContain('Add interfaces, tokens, repositories, or layers only when');
-    expect(agents).toContain('explicit transaction boundary');
-    expect(agents).toContain('Keep request flow traceable');
-    expect(agents).toContain('If no durable knowledge changed, report that');
-    expect(agents).toContain('Do not store secrets, raw logs, command transcripts');
+    const engineering = plan.generated['.agents/instructions/engineering.md'];
+    expect(engineering).toContain('Keep controllers transport-focused');
+    expect(engineering).toContain('Add interfaces, tokens, repositories, or layers only when');
+    expect(engineering).toContain('explicit transaction boundary');
+    expect(engineering).toContain('Keep request flow traceable');
+    const workflow = plan.generated['.agents/instructions/workflow.md'];
+    expect(workflow).toContain('If no durable knowledge changed, report that');
+    expect(workflow).toContain('Do not store secrets, raw logs, command transcripts');
 
-    const architecture = plan.generated['agents/ARCHITECTURE.md'];
+    const architecture = plan.generated['.agents/ARCHITECTURE.md'];
     expect(architecture).toContain('<!-- nest-cqrs:managed:architecture:start -->');
     expect(architecture).toContain('### Request flow and component responsibilities');
     expect(architecture).toContain('request validation → controller → command or query bus');
@@ -142,36 +151,37 @@ describe('init foundation', () => {
     expect(architecture).toContain('`SWAGGER_ENABLED` is required by the Joi schema');
     expect(architecture).toContain('Joi does not provide a runtime default');
 
-    const context = plan.generated['agents/PROJECT_CONTEXT.md'];
+    const context = plan.generated['.agents/PROJECT.md'];
     expect(context).toContain('Product-specific context is INCOMPLETE');
-    expect(context).toContain('## TODO: Product purpose — INCOMPLETE');
-    expect(context).toContain('## TODO: Domain concepts — INCOMPLETE');
-    expect(context).toContain('## TODO: Business rules — INCOMPLETE');
-    expect(context).toContain('## TODO: Users and roles — INCOMPLETE');
+    expect(context).toContain('Status: pending');
+    expect(context).toContain('## Purpose');
+    expect(context).toContain('[REQUIRED: Record confirmed features, business rules, users and roles');
+    expect(context).toContain('Build: `npm run build`');
 
-    const map = plan.generated['agents/CODEBASE_MAP.md'];
+    const map = plan.generated['.agents/CODEBASE_MAP.md'];
     expect(map).toContain('<!-- nest-cqrs:managed:codebase-map:start -->');
     expect(map).toContain('`src/config/`');
     expect(map).not.toContain('src/database/');
     expect(map).not.toContain('src/features/');
 
-    const readme = plan.generated['agents/README.md'];
-    expect(readme).toContain('[`AGENTS.md`](../AGENTS.md) is the canonical source');
-    expect(readme).toContain('does not define a second or competing policy');
+    const readme = plan.generated['.agents/README.md'];
+    expect(readme).toContain('This layout follows ContextRivet');
+    expect(readme).toContain('Existing canonical files and ContextRivet-managed blocks remain project-owned');
     expect(readme).toContain('preserve it byte-for-byte');
 
-    const index = plan.generated['agents/knowledge/INDEX.md'];
+    const index = plan.generated['.agents/knowledge/INDEX.md'];
     expect(index).toContain('Do not create empty placeholder notes');
-    expect(index).toContain('No feature or topic notes have been created yet.');
+    expect(index).toContain('No feature or topic notes have been created by the generator.');
     expect(index).not.toContain('./order-lifecycle.md');
 
-    const testing = plan.generated['agents/TESTING.md'];
+    const testing = plan.generated['.agents/instructions/testing.md'];
     expect(testing).toContain('This project uses Jest');
     expect(testing).toContain('Do not install, replace, or reconfigure a test framework');
     expect(testing).toContain('extensionless relative imports');
     expect(testing).toContain('do not silently rewrite project tooling');
 
     for (const path of guidancePaths) {
+      expect(plan.generated[path].trimEnd()).toMatch(/<!-- nest-cqrs:managed:[\w-]+:end -->$/);
       const links = [...plan.generated[path].matchAll(/\]\(([^)]+\.md)\)/g)].map((match) => match[1]);
       for (const link of links) {
         const target = posix.normalize(posix.join(posix.dirname(path), link));
@@ -188,8 +198,8 @@ describe('init foundation', () => {
       ['database', 'rate-limit'],
       { type: 'postgres', migrations: true },
     );
-    const architecture = complete.generated['agents/ARCHITECTURE.md'];
-    const map = complete.generated['agents/CODEBASE_MAP.md'];
+    const architecture = complete.generated['.agents/ARCHITECTURE.md'];
+    const map = complete.generated['.agents/CODEBASE_MAP.md'];
     expect(architecture).toContain('### Database');
     expect(architecture).toContain('initial `DB_TYPE` is `postgres`');
     expect(architecture).toContain('### Migrations');
@@ -198,28 +208,28 @@ describe('init foundation', () => {
     expect(map).toContain('`src/database/data-source.ts`');
     expect(map).toContain('`src/database/migrations/`');
     expect(map).toContain('`src/features/stock-items/`');
-    expect(complete.generated['AGENTS.md']).toContain('Run migrations: `npm run migration:run`');
+    expect(complete.generated['.agents/PROJECT.md']).toContain('Run migrations: `npm run migration:run`');
 
     const rateOnly = buildPlan(project(), '0.1.0', undefined, ['rate-limit']);
-    expect(rateOnly.generated['agents/ARCHITECTURE.md']).toContain('### Rate limiting');
-    expect(rateOnly.generated['agents/ARCHITECTURE.md']).not.toContain('### Database');
-    expect(rateOnly.generated['agents/ARCHITECTURE.md']).not.toContain('### Migrations');
-    expect(rateOnly.generated['agents/CODEBASE_MAP.md']).not.toContain('src/database/');
+    expect(rateOnly.generated['.agents/ARCHITECTURE.md']).toContain('### Rate limiting');
+    expect(rateOnly.generated['.agents/ARCHITECTURE.md']).not.toContain('### Database');
+    expect(rateOnly.generated['.agents/ARCHITECTURE.md']).not.toContain('### Migrations');
+    expect(rateOnly.generated['.agents/CODEBASE_MAP.md']).not.toContain('src/database/');
 
     const mongo = buildPlan(project(), '0.1.0', undefined, ['database'], { type: 'mongodb', migrations: false });
-    expect(mongo.generated['agents/ARCHITECTURE.md']).toContain('initial `DB_TYPE` is `mongodb`');
-    expect(mongo.generated['agents/ARCHITECTURE.md']).not.toContain('### Migrations');
-    expect(mongo.generated['agents/CODEBASE_MAP.md']).not.toContain('src/database/data-source.ts');
+    expect(mongo.generated['.agents/ARCHITECTURE.md']).toContain('initial `DB_TYPE` is `mongodb`');
+    expect(mongo.generated['.agents/ARCHITECTURE.md']).not.toContain('### Migrations');
+    expect(mongo.generated['.agents/CODEBASE_MAP.md']).not.toContain('src/database/data-source.ts');
   });
 
   it('renders commands for the detected package manager', () => {
     const pnpmRoot = project();
     writeFileSync(join(pnpmRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
-    expect(buildPlan(pnpmRoot, '0.1.0').generated['AGENTS.md']).toContain('Build: `pnpm build`');
+    expect(buildPlan(pnpmRoot, '0.1.0').generated['.agents/PROJECT.md']).toContain('Build: `pnpm build`');
 
     const yarnRoot = project();
     writeFileSync(join(yarnRoot, 'yarn.lock'), '');
-    expect(buildPlan(yarnRoot, '0.1.0').generated['AGENTS.md']).toContain('Build: `yarn build`');
+    expect(buildPlan(yarnRoot, '0.1.0').generated['.agents/PROJECT.md']).toContain('Build: `yarn build`');
   });
 
   it('builds a Fastify foundation without deferred integrations', () => {
@@ -308,10 +318,10 @@ describe('init foundation', () => {
     expect(plan.generated['.env.example']).toContain('NODE_ENV="development"');
     expect(plan.generated['.env.example']).toContain('PORT=3000');
     expect(plan.generated['.env.development.example']).toBeUndefined();
-    expect(plan.generated['agents/TESTING.md']).toContain(
+    expect(plan.generated['.agents/instructions/testing.md']).toContain(
       'prove commit and rollback behavior',
     );
-    expect(plan.generated['agents/TESTING.md']).toContain(
+    expect(plan.generated['.agents/instructions/testing.md']).toContain(
       'Validate migrations against disposable data',
     );
   });
@@ -334,8 +344,8 @@ describe('init foundation', () => {
     expect(esm.generated['src/main.ts']).toContain("from './app.module.js'");
     expect(esm.generated['test/app.e2e-spec.ts']).toBeUndefined();
     expect(esm.generated['src/health/health.controller.spec.ts']).toBeUndefined();
-    expect(esm.generated['agents/TESTING.md']).toContain('This project uses Vitest');
-    expect(esm.generated['agents/TESTING.md']).toContain('`.js` suffixes');
+    expect(esm.generated['.agents/instructions/testing.md']).toContain('This project uses Vitest');
+    expect(esm.generated['.agents/instructions/testing.md']).toContain('`.js` suffixes');
     expect(JSON.parse(esm.generated['package.json']).scripts.test).toBe(
       'vitest run --passWithNoTests',
     );
@@ -383,7 +393,7 @@ describe('init foundation', () => {
     expect(plan.generated['.env.example']).not.toContain('OTEL_');
     expect(plan.generated['package.json']).not.toMatch(/passport|@nestjs\/jwt/);
     expect(plan.generated['src/auth/auth.module.ts']).toBeUndefined();
-    expect(plan.generated['agents/ARCHITECTURE.md']).toContain('illustrative CQRS scaffold');
+    expect(plan.generated['.agents/ARCHITECTURE.md']).toContain('illustrative CQRS scaffold');
   });
 
   it('selects MySQL or MongoDB drivers and only generates relational migration scripts', () => {
@@ -431,9 +441,9 @@ describe('init foundation', () => {
     expect(packageJson.scripts['migration:run']).toContain('typeorm-ts-node-esm');
     expect(manifest.presets.database.migrations).toBe(true);
     expect(manifest.presets.migrations.databaseType).toBe('mysql');
-    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain('Run migrations: `npm run migration:run`');
-    expect(readFileSync(join(root, 'agents/ARCHITECTURE.md'), 'utf8')).toContain('### Migrations');
-    expect(readFileSync(join(root, 'agents/CODEBASE_MAP.md'), 'utf8')).toContain('`src/database/data-source.ts`');
+    expect(readFileSync(join(root, '.agents/PROJECT.md'), 'utf8')).toContain('Run migrations: `npm run migration:run`');
+    expect(readFileSync(join(root, '.agents/ARCHITECTURE.md'), 'utf8')).toContain('### Migrations');
+    expect(readFileSync(join(root, '.agents/CODEBASE_MAP.md'), 'utf8')).toContain('`src/database/data-source.ts`');
   });
 
   it('updates only managed guidance blocks when adding a preset and preserves user text byte-for-byte', async () => {
@@ -446,41 +456,47 @@ describe('init foundation', () => {
       skipInstall: true,
       runFeature: () => undefined,
     });
-    const architecturePath = join(root, 'agents/ARCHITECTURE.md');
+    const architecturePath = join(root, '.agents/ARCHITECTURE.md');
     const original = readFileSync(architecturePath, 'utf8');
     const start = '<!-- nest-cqrs:managed:architecture:start -->';
     const end = '<!-- nest-cqrs:managed:architecture:end -->';
     const customized = `USER PREFIX\n${original.replace(start, `${start}\nUSER MANAGED TEXT`).replace(end, `USER MANAGED TEXT\n${end}`)}USER SUFFIX\n`;
     writeFileSync(architecturePath, customized);
-    const readmeBefore = readFileSync(join(root, 'agents/README.md'), 'utf8');
-    const contextBefore = readFileSync(join(root, 'agents/PROJECT_CONTEXT.md'), 'utf8');
-    const indexBefore = readFileSync(join(root, 'agents/knowledge/INDEX.md'), 'utf8');
+    const readmeBefore = readFileSync(join(root, '.agents/README.md'), 'utf8');
+    const contextBefore = readFileSync(join(root, '.agents/PROJECT.md'), 'utf8');
+    const indexBefore = readFileSync(join(root, '.agents/knowledge/INDEX.md'), 'utf8');
 
     await addPresets({ root, names: ['rate-limit'], dryRun: false, skipInstall: true });
 
     const updated = readFileSync(architecturePath, 'utf8');
     expect(updated.startsWith('USER PREFIX\n')).toBe(true);
-    expect(updated.endsWith('USER SUFFIX\n')).toBe(true);
+    expect(updated).toContain('USER SUFFIX\n');
+    expect(updated.indexOf('USER SUFFIX')).toBeLessThan(updated.indexOf(start));
+    expect(updated.trimEnd().endsWith(end)).toBe(true);
+    const withoutFooter = (value: string) => value.replace(/<!-- nest-cqrs:managed:architecture:start -->[\s\S]*?<!-- nest-cqrs:managed:architecture:end -->/, '');
+    const projectOwned = withoutFooter(customized);
+    expect(withoutFooter(updated).startsWith(projectOwned)).toBe(true);
+    expect(withoutFooter(updated).slice(projectOwned.length)).toMatch(/^\n*$/);
     expect(updated).not.toContain('USER MANAGED TEXT');
     expect(updated).toContain('### Rate limiting');
-    expect(readFileSync(join(root, 'agents/README.md'), 'utf8')).toBe(readmeBefore);
-    expect(readFileSync(join(root, 'agents/PROJECT_CONTEXT.md'), 'utf8')).toBe(contextBefore);
-    expect(readFileSync(join(root, 'agents/knowledge/INDEX.md'), 'utf8')).toBe(indexBefore);
+    expect(readFileSync(join(root, '.agents/README.md'), 'utf8')).toBe(readmeBefore);
+    expect(readFileSync(join(root, '.agents/PROJECT.md'), 'utf8')).toBe(contextBefore);
+    expect(readFileSync(join(root, '.agents/knowledge/INDEX.md'), 'utf8')).toBe(indexBefore);
   });
 
   it('previews add-time guidance updates without writing them', async () => {
     const root = project();
     await initialize({ root, packageVersion: '0.1.0', dryRun: false, resume: false, skipInstall: true, runFeature: () => undefined });
-    const architectureBefore = readFileSync(join(root, 'agents/ARCHITECTURE.md'), 'utf8');
-    const mapBefore = readFileSync(join(root, 'agents/CODEBASE_MAP.md'), 'utf8');
+    const architectureBefore = readFileSync(join(root, '.agents/ARCHITECTURE.md'), 'utf8');
+    const mapBefore = readFileSync(join(root, '.agents/CODEBASE_MAP.md'), 'utf8');
 
     const result = await addPresets({ root, names: ['rate-limit'], dryRun: true, skipInstall: true });
 
-    expect(result.operations).toContain('UPDATE agents/ARCHITECTURE.md');
-    expect(result.operations).toContain('UPDATE agents/CODEBASE_MAP.md');
+    expect(result.operations).toContain('UPDATE .agents/ARCHITECTURE.md');
+    expect(result.operations).toContain('UPDATE .agents/CODEBASE_MAP.md');
     expect(result.operations).not.toContain('UPDATE AGENTS.md');
-    expect(readFileSync(join(root, 'agents/ARCHITECTURE.md'), 'utf8')).toBe(architectureBefore);
-    expect(readFileSync(join(root, 'agents/CODEBASE_MAP.md'), 'utf8')).toBe(mapBefore);
+    expect(readFileSync(join(root, '.agents/ARCHITECTURE.md'), 'utf8')).toBe(architectureBefore);
+    expect(readFileSync(join(root, '.agents/CODEBASE_MAP.md'), 'utf8')).toBe(mapBefore);
     const manifest = JSON.parse(readFileSync(join(root, '.nest-cqrs.json'), 'utf8'));
     expect(manifest.presets['rate-limit']).toBeUndefined();
   });
@@ -493,7 +509,7 @@ describe('init foundation', () => {
   ])('rejects %s managed markers before writing preset changes', async (_kind, mutate) => {
     const root = project();
     await initialize({ root, packageVersion: '0.1.0', dryRun: false, resume: false, skipInstall: true, runFeature: () => undefined });
-    const architecturePath = join(root, 'agents/ARCHITECTURE.md');
+    const architecturePath = join(root, '.agents/ARCHITECTURE.md');
     writeFileSync(architecturePath, mutate(readFileSync(architecturePath, 'utf8')));
     const appBefore = readFileSync(join(root, 'src/app.module.ts'), 'utf8');
 
@@ -506,11 +522,29 @@ describe('init foundation', () => {
   it('rejects a missing managed guidance file before writing preset changes', async () => {
     const root = project();
     await initialize({ root, packageVersion: '0.1.0', dryRun: false, resume: false, skipInstall: true, runFeature: () => undefined });
-    rmSync(join(root, 'agents/CODEBASE_MAP.md'));
+    rmSync(join(root, '.agents/CODEBASE_MAP.md'));
     const appBefore = readFileSync(join(root, 'src/app.module.ts'), 'utf8');
 
     await expect(addPresets({ root, names: ['rate-limit'], dryRun: false, skipInstall: true })).rejects.toThrow('managed guidance file is missing');
     expect(readFileSync(join(root, 'src/app.module.ts'), 'utf8')).toBe(appBefore);
+  });
+
+  it('previews and appends a footer when an existing guidance file has no Nest CQRS markers', async () => {
+    const root = project();
+    await initialize({ root, packageVersion: '0.1.0', skipInstall: true });
+    const path = join(root, '.agents/ARCHITECTURE.md');
+    const original = '# Project architecture\nStatus: ready\n\nCustom architecture and decisions.\n';
+    writeFileSync(path, original);
+
+    const preview = await addPresets({ root, names: ['rate-limit'], dryRun: true, skipInstall: true });
+    expect(preview.operations).toContain('APPEND .agents/ARCHITECTURE.md');
+    expect(readFileSync(path, 'utf8')).toBe(original);
+
+    await addPresets({ root, names: ['rate-limit'], skipInstall: true });
+    const updated = readFileSync(path, 'utf8');
+    expect(updated.startsWith(original)).toBe(true);
+    expect(updated).toContain('### Rate limiting');
+    expect(updated.trimEnd().endsWith('<!-- nest-cqrs:managed:architecture:end -->')).toBe(true);
   });
 
   it('dry-run reports operations without writing', () => {
@@ -519,11 +553,11 @@ describe('init foundation', () => {
     const operations = applyPlan(root, plan, true);
     expect(operations).toContain('UPDATE src/main.ts');
     expect(operations).toContain('CREATE AGENTS.md');
-    expect(operations).toContain('CREATE agents/README.md');
-    expect(operations).toContain('CREATE agents/ARCHITECTURE.md');
-    expect(operations).toContain('CREATE agents/PROJECT_CONTEXT.md');
-    expect(operations).toContain('CREATE agents/CODEBASE_MAP.md');
-    expect(operations).toContain('CREATE agents/knowledge/INDEX.md');
+    expect(operations).toContain('CREATE .agents/README.md');
+    expect(operations).toContain('CREATE .agents/ARCHITECTURE.md');
+    expect(operations).toContain('CREATE .agents/PROJECT.md');
+    expect(operations).toContain('CREATE .agents/CODEBASE_MAP.md');
+    expect(operations).toContain('CREATE .agents/knowledge/INDEX.md');
     expect(readFileSync(join(root, 'src/main.ts'), 'utf8')).toBe('default');
     expect(existsSync(join(root, '.env.example'))).toBe(false);
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false);
@@ -538,7 +572,7 @@ describe('init foundation', () => {
     expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(false);
     expect(readFileSync(join(root, 'src/main.ts'), 'utf8')).toContain('FastifyAdapter');
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(true);
-    expect(existsSync(join(root, 'agents/knowledge/INDEX.md'))).toBe(true);
+    expect(existsSync(join(root, '.agents/knowledge/INDEX.md'))).toBe(true);
   });
 
   it('preserves project-owned .gitignore content through init and add', async () => {
@@ -633,6 +667,8 @@ describe('init foundation', () => {
 
   it('keeps recovery metadata after an install failure and resumes safely', async () => {
     const root = project();
+    const existingAgents = '# >>> contextrivet project >>>\nExisting project rules\n# <<< contextrivet project <<<\n';
+    writeFileSync(join(root, 'AGENTS.md'), existingAgents);
     const originalGitignore = '# user rules\n/dist\n';
     writeFileSync(join(root, '.gitignore'), originalGitignore);
     await expect(initialize({
@@ -646,7 +682,9 @@ describe('init foundation', () => {
     })).rejects.toThrow('simulated install failure');
     expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(true);
     expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(false);
-    const guidanceBeforeResume = readFileSync(join(root, 'agents/ARCHITECTURE.md'), 'utf8');
+    const guidanceBeforeResume = readFileSync(join(root, '.agents/ARCHITECTURE.md'), 'utf8');
+    const agentsBeforeResume = readFileSync(join(root, 'AGENTS.md'), 'utf8');
+    expect(agentsBeforeResume.startsWith(existingAgents)).toBe(true);
     const afterFailure = readFileSync(join(root, '.gitignore'), 'utf8');
     expect(afterFailure.startsWith(originalGitignore)).toBe(true);
     writeFileSync(join(root, '.gitignore'), `${afterFailure}# added while pending\n`);
@@ -664,7 +702,8 @@ describe('init foundation', () => {
     });
     expect(existsSync(join(root, '.nest-cqrs.pending.json'))).toBe(false);
     expect(existsSync(join(root, '.nest-cqrs.json'))).toBe(true);
-    expect(readFileSync(join(root, 'agents/ARCHITECTURE.md'), 'utf8')).toBe(guidanceBeforeResume);
+    expect(readFileSync(join(root, '.agents/ARCHITECTURE.md'), 'utf8')).toBe(guidanceBeforeResume);
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe(agentsBeforeResume);
     expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(beforeResume);
   });
 
@@ -751,13 +790,99 @@ describe('init foundation', () => {
     expect(readFileSync(join(root, 'src/main.ts'), 'utf8')).toBe('default');
   });
 
-  it.each(['AGENTS.md', 'agents/ARCHITECTURE.md'])('rejects a %s guidance collision before any writes', (path) => {
+  it.each(Object.keys(managedBlocks))('appends visible guidance to existing %s without changing its bytes', (path) => {
     const root = project();
     mkdirSync(join(root, path, '..'), { recursive: true });
-    writeFileSync(join(root, path), 'user content');
-    expect(() => applyPlan(root, buildPlan(root, '0.1.0'), false)).toThrow('Refusing to overwrite');
+    const original = '\ufeff# >>> contextrivet project >>>\r\nUser rules and verified context\r\n# <<< contextrivet project <<<';
+    writeFileSync(join(root, path), original);
+    const plan = buildPlan(root, '0.1.0');
+    const preview = applyPlan(root, plan, true);
+    expect(preview).toContain(`APPEND ${path}`);
+    expect(readFileSync(join(root, path), 'utf8')).toBe(original);
+
+    applyPlan(root, plan, false);
+    const updated = readFileSync(join(root, path), 'utf8');
+    expect(updated.startsWith(`${original}\r\n\r\n`)).toBe(true);
+    expect(updated).toContain('## Nest CQRS generated guidance');
+    expect(updated.trimEnd().endsWith(`<!-- nest-cqrs:managed:${managedBlocks[path]}:end -->`)).toBe(true);
+    expect(updated.replaceAll('\r\n', '')).not.toContain('\n');
+    expect(buildPlan(root, '0.1.0').generated[path]).toBe(updated);
+  });
+
+  it.each(['AGENTS.md', '.agents', '.agents/instructions'])('rejects symlinked guidance path %s before any writes', (path) => {
+    const root = project();
+    const outside = project();
+    mkdirSync(join(root, path, '..'), { recursive: true });
+    const target = path === 'AGENTS.md' ? join(outside, 'package.json') : outside;
+    symlinkSync(target, join(root, path), path === 'AGENTS.md' ? 'file' : 'dir');
+    expect(() => buildPlan(root, '0.1.0')).toThrow('symlink or non-regular path');
     expect(readFileSync(join(root, 'src/main.ts'), 'utf8')).toBe('default');
-    expect(readFileSync(join(root, path), 'utf8')).toBe('user content');
+  });
+
+  it('rejects an existing malformed footer before initialization writes', () => {
+    const root = project();
+    writeFileSync(join(root, 'AGENTS.md'), 'User rules\n<!-- nest-cqrs:managed:guidance:start -->\nbroken');
+    expect(() => buildPlan(root, '0.1.0')).toThrow('managed block');
+    expect(readFileSync(join(root, 'src/main.ts'), 'utf8')).toBe('default');
+  });
+
+  it('preserves ContextRivet canonical routing, metadata, skills, readiness, and existing knowledge', async () => {
+    const root = project();
+    const projectContext = '# Project context\nStatus: ready\n\nConfirmed product and domain details.\n';
+    const originals = {
+      'AGENTS.md': '# >>> contextrivet project >>>\nRead .agents/AGENTS.md first.\n# <<< contextrivet project <<<\n',
+      '.agents/AGENTS.md': 'Existing canonical rules and instruction precedence.\n',
+      '.agents/PROJECT.md': projectContext,
+      '.agents/knowledge/INDEX.md': '# Knowledge index\n\n- features/orders.md — order invariants\n',
+      '.agents/knowledge/features/orders.md': '# Orders\nVerified existing business rules.\n',
+      '.agents/contextrivet/project.json': '{"canonical":".agents/AGENTS.md","stack":"nestjs"}\n',
+      '.agents/skills/custom/SKILL.md': '# Existing custom skill\n',
+      'agents/legacy-note.md': '# Existing legacy note\n',
+    };
+    for (const [path, content] of Object.entries(originals)) {
+      mkdirSync(join(root, path, '..'), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+
+    await initialize({ root, packageVersion: '0.1.0', skipInstall: true });
+    await addPresets({ root, names: ['rate-limit'], skipInstall: true });
+
+    for (const [path, content] of Object.entries(originals)) {
+      const updated = readFileSync(join(root, path), 'utf8');
+      if (Object.hasOwn(managedBlocks, path)) expect(updated.startsWith(content)).toBe(true);
+      else expect(updated).toBe(content);
+    }
+    const updated = readFileSync(join(root, '.agents/PROJECT.md'), 'utf8');
+    expect(updated.match(/^Status:/gm)).toHaveLength(1);
+    expect(updated).not.toContain('[REQUIRED:');
+    expect(updated.match(/<!-- nest-cqrs:managed:project:start -->/g)).toHaveLength(1);
+  });
+
+  it('keeps legacy v7 guidance in its original paths when adding presets', async () => {
+    const root = project();
+    await initialize({ root, packageVersion: '0.1.0', skipInstall: true });
+    rmSync(join(root, '.agents'), { recursive: true });
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    const legacy = renderLegacyGuidanceFiles({ packageManager: 'npm', packageJson });
+    for (const [path, content] of Object.entries(legacy)) {
+      mkdirSync(join(root, path, '..'), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+    const manifestPath = join(root, '.nest-cqrs.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.foundation.version = 7;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    const architecture = join(root, 'agents/ARCHITECTURE.md');
+    writeFileSync(architecture, `${readFileSync(architecture, 'utf8')}\nUSER LEGACY NOTE\n`);
+
+    await addPresets({ root, names: ['rate-limit'], skipInstall: true });
+
+    expect(existsSync(join(root, '.agents'))).toBe(false);
+    const updated = readFileSync(architecture, 'utf8');
+    expect(updated).toContain('USER LEGACY NOTE');
+    expect(updated).toContain('### Rate limiting');
+    expect(updated.trimEnd().endsWith('<!-- nest-cqrs:managed:architecture:end -->')).toBe(true);
+    expect(JSON.parse(readFileSync(manifestPath, 'utf8')).foundation.version).toBe(7);
   });
 
   it('does not rewrite managed guidance or project-owned text for a v5/v3 project', async () => {
@@ -768,13 +893,13 @@ describe('init foundation', () => {
     manifest.foundation.version = 5;
     for (const preset of Object.values(manifest.presets ?? {}) as Array<{ version: number }>) preset.version = 3;
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-    const architecturePath = join(root, 'agents/ARCHITECTURE.md');
+    const architecturePath = join(root, '.agents/ARCHITECTURE.md');
     const customized = `${readFileSync(architecturePath, 'utf8')}\nUSER-OWNED LEGACY NOTE\n`;
     writeFileSync(architecturePath, customized);
 
     const result = await addPresets({ root, names: ['rate-limit'], dryRun: false, skipInstall: true });
-    expect(result.operations).not.toContain('UPDATE agents/ARCHITECTURE.md');
-    expect(result.operations).not.toContain('UPDATE agents/CODEBASE_MAP.md');
+    expect(result.operations).not.toContain('UPDATE .agents/ARCHITECTURE.md');
+    expect(result.operations).not.toContain('UPDATE .agents/CODEBASE_MAP.md');
     expect(readFileSync(architecturePath, 'utf8')).toBe(customized);
     const updatedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     expect(updatedManifest.foundation.version).toBe(5);
