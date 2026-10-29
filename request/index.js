@@ -91,11 +91,10 @@ function generate(kind, options) {
         let updated = new ModuleDeclarator().declare(content, {
           module: modulePath,
           path: requestPath,
-          name,
-          type: 'handler',
+          name: `${name}.handler${esm ? '.js' : ''}`,
+          className: symbol,
           metadata: 'providers',
           symbol,
-          isEsm: esm,
         });
         if (/const\s+handlers\s*=\s*\[/.test(content)) {
           updated = updated.replace(

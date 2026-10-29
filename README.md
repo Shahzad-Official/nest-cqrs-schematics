@@ -102,15 +102,20 @@ without a generated block is reported as `APPEND`; existing blocks as `UPDATE`.
 
 Install these before starting:
 
-1. Node.js 24.15.0 or newer within Node 24 (recommended). The dependencies also
-   support Node `^22.22.3` and `>=26.0.0`; Node 25 is not supported. This repository's
-   `.nvmrc` selects Node 24. If you use nvm, run `nvm install` and `nvm use` here.
+1. Node.js `^22.22.3 || >=24.15.0`, including Node 25. The generator uses your
+   active Node version. This repository's optional `.nvmrc` selects Node 24;
+   switching to it is not required when your current Node satisfies this range.
 2. npm or pnpm. npm is included with Node.js; pnpm must be installed separately.
 3. The Nest CLI:
 
    ```bash
    npm install --global @nestjs/cli
    ```
+
+   On Node 25, use `npm install --global @nestjs/cli@11`. The generator supports
+   Node 25 with Nest 11 tooling; the Nest 12 CLI has its own narrower Node engine
+   requirements. The target project's CLI and dependencies must support its Node
+   runtime independently of this generator.
 
    You can verify it with:
 
@@ -277,10 +282,9 @@ any directory:
 nest-cqrs update
 ```
 
-Updates require a supported active Node.js version, including dry runs. With
-fnm, run `fnm exec --using=24 nest-cqrs update`; with nvm, run `nvm use 24`
-before updating. The updater checks its runtime before downloading and keeps
-the installer on that same Node.js runtime.
+Updates use your active Node.js version, including Node 25. The updater checks
+its runtime before downloading and keeps the installer on that same Node.js
+runtime. No automatic Node switching or machine-default changes take place.
 
 The command downloads the latest installer and source from GitHub `main`,
 installs locked dependencies, and registers the updated global command. It
@@ -784,10 +788,11 @@ nest-cqrs --help
 
 ### `EBADENGINE` during installation
 
-Check `node --version`. Node 25 does not satisfy the installed Angular DevKit and
-Nest schematics engine requirements. Switch to the supported Node version above
-(with nvm: `nvm install` then `nvm use` in this repository), then reinstall using
-your chosen package manager. Do not suppress the warning with `--force`.
+Check `node --version` against the range above. Older generator installations
+excluded Node 25; rerun the one-command installer to replace those snapshots
+with the compatible dependencies. Current installations support Node 25 with
+engine checks enforced. Target Nest projects can impose additional requirements
+through their own dependencies. Do not bypass engine checks with `--force`.
 
 ### `ELINKGLOBAL: link should never be --global`
 

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+    "node": "^22.22.3 || >=24.15.0"
   },
   "schematics": "./collection.json",
   "bin": {
@@ -23,9 +23,9 @@
     "test:acceptance": "vitest run --config ./vitest.config.acceptance.ts"
   },
   "dependencies": {
-    "@angular-devkit/core": "22.2.0",
-    "@angular-devkit/schematics": "22.2.0",
-    "@nestjs/schematics": "12.0.6"
+    "@angular-devkit/core": "21.2.29",
+    "@angular-devkit/schematics": "21.2.29",
+    "@nestjs/schematics": "11.1.0"
   },
   "devDependencies": {
     "typescript": "^6.0.2",

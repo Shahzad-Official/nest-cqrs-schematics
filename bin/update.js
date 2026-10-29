@@ -12,7 +12,7 @@ export function assertSupportedNode(version = process.versions.node) {
   const supported = /^\d+\.\d+\.\d+$/.test(version) && (
     (major === 22 && (minor > 22 || (minor === 22 && patch >= 3)))
     || (major === 24 && minor >= 15)
-    || major >= 26
+    || major >= 25
   );
   if (!supported) {
     throw new Error(`Node.js v${version} is unsupported; required: ${packageJson.engines.node}. Activate Node 24 and retry: fnm exec --using=24 nest-cqrs update (or nvm use 24, then nest-cqrs update).`);
@@ -32,7 +32,7 @@ export function runUpdate({ root, packageManager, dryRun = false }, spawn = spaw
   if (!['npm', 'pnpm'].includes(packageManager)) {
     throw new Error('Choose the installer package manager: nest-cqrs update --package-manager npm (or pnpm).');
   }
-  console.log(`Updating Nest CQRS Schematics from main using ${packageManager}...`);
+  console.log(`Updating Nest CQRS Schematics from main using ${packageManager} (Node v${process.versions.node})...`);
   if (dryRun) {
     console.log(`Would download ${installerUrl} and run the installer. No files changed.`);
     return;

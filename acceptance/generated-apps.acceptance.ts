@@ -194,9 +194,11 @@ function verifyGeneratedApplication(
   const manager = nestMajor === 11 ? 'npm' : 'pnpm';
   try {
     run(root, process.execPath, [cli, 'init', '--skip-install', '--yes', ...initArgs]);
-    if (nestMajor === 11) {
+    if (nestMajor === 11 || esm) {
       run(root, process.execPath, [cli, 'g', 'command', 'features/users/check-user', '--skip-install']);
       run(root, process.execPath, [cli, 'g', 'query', 'features/users/find-user', '--skip-install']);
+    }
+    if (nestMajor === 11) {
       run(root, 'npm', ['install', '--package-lock-only', '--strict-peer-deps']);
       run(root, 'npm', ['ci', '--strict-peer-deps']);
       run(root, 'npm', ['ls', '--all', '--omit=dev']);
@@ -377,7 +379,7 @@ describe('generated application acceptance', () => {
   });
 
   it('verifies an ESM and Vitest foundation', () => {
-    verifyGeneratedApplication('esm-foundation', ['--no-dummy-feature'], true);
+    verifyGeneratedApplication('esm-foundation', ['--dummy-feature', 'users'], true);
   });
 
   it('verifies rate limiting, PostgreSQL migrations, and a generated CQRS feature', () => {

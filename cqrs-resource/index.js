@@ -101,11 +101,10 @@ function registerFeatureModule({ feature, featurePath }) {
     const options = {
       module: parentModule,
       path: featurePath,
-      name: feature,
-      type: 'module',
+      name: `${feature}.module${usesEsmImports(tree) ? '.js' : ''}`,
+      className: symbol,
       metadata: 'imports',
       symbol,
-      isEsm: usesEsmImports(tree),
     };
     const content = tree.read(parentModule).toString();
     const hasImport = new RegExp(
