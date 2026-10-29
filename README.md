@@ -268,6 +268,43 @@ pnpm 11, `pnpm add --global .` registers the command globally.
 With pnpm 10, use `pnpm link --global` instead. If pnpm reports that its global
 bin directory is missing, run `pnpm setup` and reopen your terminal first.
 
+### Update the installed generator
+
+After installing with `install.sh` or the one-command download, run this from
+any directory:
+
+```bash
+nest-cqrs update
+```
+
+The command downloads the latest installer and source from GitHub `main`,
+installs locked dependencies, and registers the updated global command. It
+remembers whether the installer used npm or pnpm. Updates are explicitly
+requested; normal generator commands do not check the network or auto-update.
+
+Preview an update without downloading or changing files:
+
+```bash
+nest-cqrs update --dry-run
+```
+
+Manual `npm link`/pnpm registrations without installer settings can select the
+package manager explicitly. The same option overrides saved settings:
+
+```bash
+nest-cqrs update --package-manager npm
+nest-cqrs update --package-manager pnpm
+```
+
+Older installations that do not recognize `update` need the one-command
+installer above run once. Subsequent updates use `nest-cqrs update`.
+
+Updating creates a new installed source copy and preserves previous copies,
+checkouts, and existing Nest project files. It does not pull into a local Git
+checkout or apply template changes to previously generated applications.
+To update a development checkout itself, run `git pull --ff-only` there and
+rerun `./install.sh npm` or `./install.sh pnpm`.
+
 ### Use without global registration
 
 After `npm ci` or `pnpm install --frozen-lockfile`, you can invoke the executable

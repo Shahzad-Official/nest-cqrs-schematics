@@ -9,6 +9,7 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { addPresets, detectPackageManager, initialize } from '../init/index.js';
 import { databaseTypes, presetNames } from '../init/presets.js';
+import { runUpdate } from './update.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -63,6 +64,7 @@ function printHelp() {
       ['add <preset> [options]', 'a', 'Add database, migrations, or rate limiting.'],
       ['generate <type> <path/name>', 'g', 'Generate a CQRS artifact.'],
       ['resource <name> [options]', 'r', 'Generate a complete CQRS or Nest resource.'],
+      ['update [options]', '', 'Update the installed generator from GitHub main.'],
       ['help', '', 'Display usage information.'],
     ],
   );
@@ -100,6 +102,7 @@ function printHelp() {
       ['--all', '-a', 'Enable all compatible optional presets.'],
       ['--yes', '-y', 'Accept defaults and skip confirmations.'],
       ['--skip-install', '-k', 'Generate files without installing packages.'],
+      ['--package-manager <npm|pnpm>', '', 'Select the package manager for update.'],
       ['--help', '-h', 'Display usage information.'],
       ['--version', '-v', 'Display the installed version.'],
     ],
@@ -138,6 +141,11 @@ function parseArgs(argv) {
     else if (argument === '--resume' || argument === '-r') result.resume = true;
     else if (argument === '--no-dummy-feature') result.skipDummyFeature = true;
     else if (argument === '--skip-install' || argument === '-k') result.skipInstall = true;
+    else if (argument.startsWith('--package-manager=')) result.packageManager = argument.slice('--package-manager='.length);
+    else if (argument === '--package-manager') {
+      result.packageManager = argv[++index];
+      if (!result.packageManager) throw new Error('--package-manager requires npm or pnpm.');
+    }
     else if (argument === '--all' || argument === '-a') result.all = true;
     else if (argument === '--yes' || argument === '-y') result.yes = true;
     else if (argument.startsWith('--dummy-feature=')) result.dummyFeature = argument.slice('--dummy-feature='.length);
@@ -162,6 +170,14 @@ function parseArgs(argv) {
     else if (['add', 'a'].includes(result.name) && !result.preset) result.preset = argument;
     else if (['resource', 'r'].includes(result.name) && !result.resourceName) result.resourceName = argument;
     else throw new Error(`Unexpected argument: ${argument}`);
+  }
+  if (result.packageManager !== undefined && !['npm', 'pnpm'].includes(result.packageManager)) {
+    throw new Error('--package-manager requires npm or pnpm.');
+  }
+  if (result.name === 'update' && argv.some((argument) => argument.startsWith('-')
+    && !['--dry-run', '-d', '--package-manager', '--help', '-h', '--version', '-v'].includes(argument)
+    && !argument.startsWith('--package-manager='))) {
+    throw new Error('update supports only --package-manager npm|pnpm, --dry-run, --help and --version.');
   }
   return result;
 }
@@ -422,6 +438,7 @@ async function main() {
     const options = parseArgs(process.argv.slice(2));
     if (options.version) return console.log(packageJson.version);
     if (options.help || options.name === 'help') return printHelp();
+    if (options.name === 'update') return runUpdate({ root: packageRoot, packageManager: options.packageManager, dryRun: options.dryRun });
     if (['init', 'i'].includes(options.name)) return await runInit(options);
     if (['add', 'a'].includes(options.name)) return await runAdd(options);
     if (['generate', 'g'].includes(options.name)) {

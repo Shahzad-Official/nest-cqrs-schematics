@@ -18,6 +18,8 @@ describe('nest-cqrs CLI', () => {
     expect(help).toContain('Commands:');
     expect(help).toContain('Generators:');
     expect(help).toContain('generate <type> <path/name>');
+    expect(help).toContain('update [options]');
+    expect(help).toContain('--package-manager <npm|pnpm>');
     expect(help).toContain('cmd, c');
     expect(help).toContain('g c features/products/create-product');
     expect(help).toContain('g e product -b mongodb -d');
@@ -39,6 +41,14 @@ describe('nest-cqrs CLI', () => {
     expect(generatorAliases.e).toBe('entity');
     expect(generatorAliases.q).toBe('query');
     expect(generatorAliases.c).toBe('command');
+  });
+
+  it('parses update options and rejects invalid managers or unrelated options', () => {
+    expect(parseArgs(['update', '--package-manager', 'pnpm', '--dry-run'])).toMatchObject({ name: 'update', packageManager: 'pnpm', dryRun: true });
+    expect(parseArgs(['update', '--package-manager=npm'])).toMatchObject({ packageManager: 'npm' });
+    for (const args of [['--package-manager'], ['--package-manager='], ['--package-manager', 'yarn'], ['--skip-install'], ['--all']]) {
+      expect(() => parseArgs(['update', ...args])).toThrow();
+    }
   });
 
   describe('standard resources', () => {

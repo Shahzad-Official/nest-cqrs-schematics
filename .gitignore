@@ -156,3 +156,6 @@ vite.config.ts.timestamp-*
 
 # Generated images and downloadable bundles
 /output/
+
+# Local installer settings
+/bin/installation.json

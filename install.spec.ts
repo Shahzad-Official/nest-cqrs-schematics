@@ -44,6 +44,10 @@ esac
   for (const name of ['npm', 'pnpm']) writeFileSync(join(bin, name), manager, { mode: 0o755 });
   writeFileSync(join(bin, 'curl'), `#!/bin/sh
 if [ "\${INSTALLER_TEST_DOWNLOAD_STATUS:-0}" != 0 ]; then exit "$INSTALLER_TEST_DOWNLOAD_STATUS"; fi
+if [ "$1" = '-fsSL' ] && [ "$2" = 'https://raw.githubusercontent.com/Shahzad-Official/nest-cqrs-schematics/main/install.sh' ]; then
+  cat "$INSTALLER_TEST_SCRIPT"
+  exit 0
+fi
 if [ "$1" != '-fsSL' ] || [ "$2" != 'https://github.com/Shahzad-Official/nest-cqrs-schematics/archive/refs/heads/main.tar.gz' ] || [ "$3" != '-o' ]; then exit 99; fi
 cp "$INSTALLER_TEST_ARCHIVE" "$4"
 `, { mode: 0o755 });
@@ -51,21 +55,26 @@ cp "$INSTALLER_TEST_ARCHIVE" "$4"
 
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+function installerEnvironment(env: Record<string, string> = {}) {
+  return {
+    ...process.env,
+    PATH: `${bin}:/usr/bin:/bin`,
+    INSTALLER_TEST_LOG: log,
+    INSTALLER_TEST_BIN: bin,
+    INSTALLER_TEST_PREFIX: root,
+    INSTALLER_TEST_ARCHIVE: archive,
+    INSTALLER_TEST_SCRIPT: join(repositoryRoot, 'install.sh'),
+    XDG_DATA_HOME: data,
+    ...env,
+  };
+}
+
 function install(args: string[] = [], env: Record<string, string> = {}, remote = false) {
   return spawnSync('/bin/sh', remote ? ['-s', '--', ...args] : [join(checkout, 'install.sh'), ...args], {
     cwd: root,
     encoding: 'utf8',
     input: remote ? readFileSync(join(repositoryRoot, 'install.sh'), 'utf8') : undefined,
-    env: {
-      ...process.env,
-      PATH: `${bin}:/usr/bin:/bin`,
-      INSTALLER_TEST_LOG: log,
-      INSTALLER_TEST_BIN: bin,
-      INSTALLER_TEST_PREFIX: root,
-      INSTALLER_TEST_ARCHIVE: archive,
-      XDG_DATA_HOME: data,
-      ...env,
-    },
+    env: installerEnvironment(env),
   });
 }
 
@@ -83,6 +92,8 @@ describe('checkout installer', () => {
       `${bin}/npm|${checkout}|prefix --global|CI=${process.env.CI ?? ''}`,
     ]);
     expect(result.stdout).toContain('Installation complete.');
+    expect(JSON.parse(readFileSync(join(checkout, 'bin/installation.json'), 'utf8'))).toEqual({ packageManager: 'npm' });
+    expect(result.stdout).toContain('Update later: nest-cqrs update');
     expect(result.stdout).toContain('Verify manually: nest-cqrs --help');
   });
 
@@ -93,6 +104,7 @@ describe('checkout installer', () => {
   ])('uses the matching global registration command with pnpm %s', (version, registration) => {
     const result = install(['pnpm'], { INSTALLER_TEST_PNPM_VERSION: version });
     expect(result.status).toBe(0);
+    expect(JSON.parse(readFileSync(join(checkout, 'bin/installation.json'), 'utf8'))).toEqual({ packageManager: 'pnpm' });
     expect(commands()).toContain(`${bin}/pnpm|${checkout}|install --frozen-lockfile --config.engine-strict=true|CI=true`);
     expect(commands()).toContain(`${bin}/pnpm|${checkout}|${registration}|CI=${process.env.CI ?? ''}`);
     expect(commands().some(command => command.startsWith(`${bin}/npm|`))).toBe(false);
@@ -158,6 +170,26 @@ function downloadedCopies() {
 }
 
 describe('downloaded installer', () => {
+  it.each(['npm', 'pnpm'])('updates through the actual CLI with %s while preserving project and checkout files', manager => {
+    prepareArchive();
+    const projectPackage = '{"name":"existing-nest-app"}\n';
+    writeFileSync(join(root, 'package.json'), projectPackage);
+    writeFileSync(join(root, 'AGENTS.md'), 'Keep these project rules.\n');
+    const originalInstaller = readFileSync(join(checkout, 'install.sh'), 'utf8');
+    const result = spawnSync(process.execPath, [join(repositoryRoot, 'bin/nest-cqrs.js'), 'update', '--package-manager', manager], {
+      cwd: root, encoding: 'utf8', env: installerEnvironment(),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('Generator updated. Existing Nest projects were not modified.');
+    const copies = downloadedCopies();
+    expect(copies).toHaveLength(1);
+    expect(JSON.parse(readFileSync(join(copies[0], 'source/bin/installation.json'), 'utf8'))).toEqual({ packageManager: manager });
+    expect(commands().every(command => command.startsWith(`${bin}/${manager}|`))).toBe(true);
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(projectPackage);
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe('Keep these project rules.\n');
+    expect(readFileSync(join(checkout, 'install.sh'), 'utf8')).toBe(originalInstaller);
+  });
+
   it.each(['npm', 'pnpm'])('downloads and installs with %s without touching the current Nest project', manager => {
     prepareArchive();
     const existing = '{"name":"my-existing-api"}\n';
@@ -171,6 +203,7 @@ describe('downloaded installer', () => {
     expect(copies).toHaveLength(1);
     const source = join(copies[0], 'source');
     expect(readFileSync(join(source, 'package.json'), 'utf8')).toBe(readFileSync(join(repositoryRoot, 'package.json'), 'utf8'));
+    expect(JSON.parse(readFileSync(join(source, 'bin/installation.json'), 'utf8'))).toEqual({ packageManager: manager });
     expect(commands().every(command => command.split('|')[1] === source)).toBe(true);
     expect(result.stdout).toContain(`Installed files: ${source}`);
     expect(result.stdout).toContain('Installation complete.');

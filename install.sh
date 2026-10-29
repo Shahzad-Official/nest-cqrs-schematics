@@ -73,9 +73,15 @@ case "$0" in
 esac
 cd "$installer_root"
 
+record_installation() {
+  mkdir -p bin
+  printf '{"packageManager":"%s"}\n' "$installer_manager" > bin/installation.json
+}
+
 if [ "$installer_manager" = npm ]; then
   printf '%s\n' 'Installing dependencies with npm (Node engine requirements enforced)...'
   npm ci --engine-strict
+  record_installation
   printf '%s\n' 'Registering nest-cqrs globally...'
   npm link
   installer_bin="$(npm prefix --global)/bin"
@@ -95,6 +101,7 @@ else
   fi
   printf '%s\n' 'Installing dependencies with pnpm (Node engine requirements enforced)...'
   CI=true pnpm install --frozen-lockfile --config.engine-strict=true
+  record_installation
   printf '%s\n' 'Registering nest-cqrs globally...'
   if [ "$installer_major" -ge 11 ]; then
     pnpm add --global .
@@ -109,4 +116,5 @@ case ":$PATH:" in
   *) printf 'Add this global command directory to PATH: %s\n' "$installer_bin" ;;
 esac
 printf '%s\n' 'Verify manually: nest-cqrs --help' \
+  'Update later: nest-cqrs update' \
   'Then, inside an existing Nest project: nest-cqrs init'
