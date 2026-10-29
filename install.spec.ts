@@ -176,7 +176,10 @@ describe('downloaded installer', () => {
     writeFileSync(join(root, 'package.json'), projectPackage);
     writeFileSync(join(root, 'AGENTS.md'), 'Keep these project rules.\n');
     const originalInstaller = readFileSync(join(checkout, 'install.sh'), 'utf8');
-    const result = spawnSync(process.execPath, [join(repositoryRoot, 'bin/nest-cqrs.js'), 'update', '--package-manager', manager], {
+    // Model a Node installation whose bin directory contains the fake package managers.
+    const cliPath = join(repositoryRoot, 'bin/nest-cqrs.js');
+    const runner = `process.execPath = ${JSON.stringify(join(bin, 'node'))}; process.argv = [process.execPath, ${JSON.stringify(cliPath)}, 'update', '--package-manager', ${JSON.stringify(manager)}]; await import(${JSON.stringify(cliPath)});`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', runner], {
       cwd: root, encoding: 'utf8', env: installerEnvironment(),
     });
     expect(result.status, result.stderr).toBe(0);

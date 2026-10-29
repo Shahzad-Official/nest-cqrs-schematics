@@ -277,6 +277,11 @@ any directory:
 nest-cqrs update
 ```
 
+Updates require a supported active Node.js version, including dry runs. With
+fnm, run `fnm exec --using=24 nest-cqrs update`; with nvm, run `nvm use 24`
+before updating. The updater checks its runtime before downloading and keeps
+the installer on that same Node.js runtime.
+
 The command downloads the latest installer and source from GitHub `main`,
 installs locked dependencies, and registers the updated global command. It
 remembers whether the installer used npm or pnpm. Updates are explicitly
