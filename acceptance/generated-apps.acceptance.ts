@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const cli = resolve(repositoryRoot, 'bin/nest-cqrs.js');
 
-function createNestProject(name: string, esm = false): string {
+function createNestProject(name: string, esm = false, nestMajor = 12): string {
   const root = mkdtempSync(join(tmpdir(), `nest-cqrs-${name}-`));
   mkdirSync(join(root, 'src'), { recursive: true });
   writeFileSync(join(root, 'package.json'), `${JSON.stringify({
@@ -22,15 +22,15 @@ function createNestProject(name: string, esm = false): string {
       'test:e2e': 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json',
     },
     dependencies: {
-      '@nestjs/common': '^12.0.0',
-      '@nestjs/core': '^12.0.0',
-      '@nestjs/platform-express': '^12.0.0',
+      '@nestjs/common': `^${nestMajor}.0.0`,
+      '@nestjs/core': `^${nestMajor}.0.0`,
+      '@nestjs/platform-express': `^${nestMajor}.0.0`,
       'reflect-metadata': '^0.2.2',
       rxjs: '^7.8.0',
     },
     devDependencies: {
-      '@nestjs/cli': '^12.0.0',
-      '@nestjs/testing': '^12.0.0',
+      '@nestjs/cli': `^${nestMajor}.0.0`,
+      '@nestjs/testing': `^${nestMajor}.0.0`,
       '@types/jest': '^30.0.0',
       '@types/node': '^24.0.0',
       '@types/supertest': '^7.0.0',
@@ -44,7 +44,7 @@ function createNestProject(name: string, esm = false): string {
       'ts-loader': '^9.5.0',
       'ts-node': '^10.9.0',
       'tsconfig-paths': '^4.2.0',
-      typescript: '^6.0.0',
+      typescript: nestMajor === 11 ? '~5.9.3' : '^6.0.0',
     },
   }, null, 2)}\n`);
   writeFileSync(join(root, 'nest-cli.json'), `${JSON.stringify({ collection: '@nestjs/schematics', sourceRoot: 'src' }, null, 2)}\n`);
@@ -95,6 +95,42 @@ export default config;
   writeFileSync(join(root, 'src/main.ts'), 'export {};\n');
   writeFileSync(join(root, 'src/app.module.ts'), 'export {};\n');
   writeFileSync(join(root, '.gitignore'), '# Nest defaults\n/dist\n/node_modules\n\n# project rule\n.local-cache/\n');
+  if (nestMajor === 11) {
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    packageJson.scripts.lint = 'eslint "src/**/*.ts"';
+    Object.assign(packageJson.devDependencies, {
+      '@eslint/js': '^9.18.0',
+      eslint: '^9.18.0',
+      'eslint-config-prettier': '^10.0.1',
+      'eslint-plugin-prettier': '^5.2.2',
+      globals: '^16.0.0',
+      'typescript-eslint': '^8.20.0',
+    });
+    writeFileSync(join(root, 'package.json'), JSON.stringify(packageJson, null, 2));
+    writeFileSync(join(root, 'eslint.config.mjs'), `import eslint from '@eslint/js';
+import prettier from 'eslint-plugin-prettier/recommended';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  eslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
+  prettier,
+  {
+    languageOptions: {
+      globals: { ...globals.node, ...globals.jest },
+      sourceType: 'commonjs',
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-floating-promises': 'warn',
+      '@typescript-eslint/no-unsafe-argument': 'warn',
+    },
+  },
+);
+`);
+  }
   if (esm) {
     const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
     packageJson.type = 'module';
@@ -107,6 +143,7 @@ export default config;
       '@vitest/coverage-v8': '^4.1.2',
       'vite-tsconfig-paths': '^5.1.4',
       vitest: '^4.1.2',
+      typescript: '~5.9.3',
     });
     writeFileSync(join(root, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
     const tsconfig = JSON.parse(readFileSync(join(root, 'tsconfig.json'), 'utf8'));
@@ -151,17 +188,68 @@ function verifyGeneratedApplication(
   initArgs: string[],
   esm = false,
   expectedScripts: Record<string, string> = {},
+  nestMajor = 12,
 ): void {
-  const root = createNestProject(name, esm);
+  const root = createNestProject(name, esm, nestMajor);
+  const manager = nestMajor === 11 ? 'npm' : 'pnpm';
   try {
     run(root, process.execPath, [cli, 'init', '--skip-install', '--yes', ...initArgs]);
-    run(root, 'pnpm', ['install', '--lockfile-only']);
-    run(root, 'pnpm', ['install', '--frozen-lockfile']);
-    run(root, 'pnpm', ['exec', 'prettier', '--write', 'src/**/*.ts']);
-    run(root, 'pnpm', ['exec', 'prettier', '--check', 'src/**/*.ts']);
-    for (const script of ['build', 'lint', 'test']) {
-      run(root, 'pnpm', [script]);
+    if (nestMajor === 11) {
+      run(root, process.execPath, [cli, 'g', 'command', 'features/users/check-user', '--skip-install']);
+      run(root, process.execPath, [cli, 'g', 'query', 'features/users/find-user', '--skip-install']);
+      run(root, 'npm', ['install', '--package-lock-only', '--strict-peer-deps']);
+      run(root, 'npm', ['ci', '--strict-peer-deps']);
+      run(root, 'npm', ['ls', '--all', '--omit=dev']);
+    } else {
+      run(root, 'pnpm', ['install', '--lockfile-only', '--strict-peer-dependencies']);
+      run(root, 'pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies']);
     }
+    const execPrettier = manager === 'npm' ? ['exec', '--', 'prettier'] : ['exec', 'prettier'];
+    run(root, manager, [...execPrettier, '--write', 'src/**/*.ts']);
+    run(root, manager, [...execPrettier, '--check', 'src/**/*.ts']);
+    for (const script of ['build', 'lint', 'test']) {
+      run(root, manager, manager === 'npm' ? ['run', script] : [script]);
+    }
+    run(root, process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import { GlobalExceptionFilter } from './dist/src/common/filters/global-exception.filter.js';
+      import { configuration } from './dist/src/config/configuration.js';
+      Object.assign(process.env, {
+        NODE_ENV: 'test', PORT: '3001', API_PREFIX: 'api', LOG_LEVEL: 'info',
+        CORS_ENABLED: 'TRUE', SWAGGER_ENABLED: 'TRUE', CORS_ORIGINS: ' https://example.com, https://other.example.com ',
+        DB_TYPE: '${initArgs.includes('mongodb') ? 'mongodb' : 'postgres'}', DB_HOST: 'localhost', DB_PORT: '5432',
+        DB_USERNAME: 'test', DB_PASSWORD: '', DB_NAME: 'test', DB_SSL: 'TRUE',
+      });
+      const config = configuration();
+      assert.equal(config.port, 3001);
+      assert.equal(config.swaggerEnabled, true);
+      assert.deepEqual(config.cors, { enabled: true, origins: ['https://example.com', 'https://other.example.com'] });
+      assert.equal(process.env.PORT, '3001');
+      if (config.db) { assert.equal(config.db.port, 5432); assert.equal(config.db.ssl, true); }
+      ${initArgs.includes('postgres') && initArgs.includes('--all') ? `
+      const migrationModule = await import('./dist/src/database/data-source.js');
+      const migrationSource = migrationModule.default.default ?? migrationModule.default;
+      assert.equal(migrationSource.isInitialized, false);
+      assert.deepEqual(migrationSource.options.ssl, { rejectUnauthorized: true });
+      ` : ''}
+      process.env.CORS_ENABLED = 'FALSE'; process.env.SWAGGER_ENABLED = 'FALSE'; process.env.DB_SSL = 'FALSE';
+      const disabled = configuration();
+      assert.equal(disabled.cors.enabled, false); assert.equal(disabled.swaggerEnabled, false);
+      if (disabled.db) assert.equal(disabled.db.ssl, false);
+      for (const name of ['PORT', 'CORS_ENABLED', 'SWAGGER_ENABLED', ...(config.db ? ['DB_PORT', 'DB_SSL'] : [])]) {
+        const original = process.env[name]; process.env[name] = 'invalid';
+        assert.throws(() => configuration(), /Config validation error/);
+        process.env[name] = original;
+      }
+      const originalError = new Error('original internal failure');
+      const response = { raw: {}, status(code) { this.statusCode = code; return this; }, send(payload) { this.payload = payload; } };
+      const host = { switchToHttp: () => ({ getResponse: () => response, getRequest: () => ({ url: '/api/users?token=secret' }) }) };
+      new GlobalExceptionFilter().catch(originalError, host);
+      assert.equal(response.raw.err, originalError);
+      assert.equal(response.statusCode, 500);
+      assert.equal(response.payload.message, 'An unexpected error occurred');
+      assert.equal(response.payload.path, '/api/users');
+    `]);
     const logging = readFileSync(join(root, 'src/common/logging/http-logger.options.ts'), 'utf8');
     expect(logging).toMatch(/if \(response\.statusCode >= 400\) return ["']warn["']/);
     expect(logging).toMatch(/return ["']silent["']/);
@@ -193,7 +281,7 @@ function verifyGeneratedApplication(
     expect(generatedPackage.scripts).toMatchObject(expectedScripts);
 
     rmSync(loggingSpec);
-    run(root, 'pnpm', ['test']);
+    run(root, manager, ['test']);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -282,6 +370,10 @@ describe('generated application acceptance', () => {
 
   it('verifies the default foundation', () => {
     verifyGeneratedApplication('foundation', ['--no-dummy-feature']);
+  });
+
+  it('verifies Nest 11 with npm strict peers, ESLint and all handler templates', () => {
+    verifyGeneratedApplication('nest11', ['--dummy-feature', 'users'], false, {}, 11);
   });
 
   it('verifies an ESM and Vitest foundation', () => {

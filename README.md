@@ -125,6 +125,13 @@ package manager from its lockfile. If neither `pnpm-lock.yaml` nor `yarn.lock`
 exists, they use npm. The generator's own package manager does not determine the
 target project's package manager.
 
+The target application must use Nest 11 or 12. CQRS, the Fastify adapter, and
+Swagger are selected to match its existing `@nestjs/core` major. Existing
+versions are preserved; incompatible Nest package majors stop generation with
+an explanation before files are written. This check covers core, common,
+testing, CQRS, the Fastify adapter, and Swagger. Use explicit versions such as
+`^11.0.0` or `^12.0.0` rather than ambiguous ranges or tags.
+
 ## Install this generator
 
 This package is currently marked private in `package.json`, so installation uses
@@ -658,7 +665,15 @@ It loads `.env.<NODE_ENV>` first and then `.env`. Supported values are:
 - `staging`
 - `production`
 
-All required values are validated with Joi. Application code consumes the typed configuration through Nest's `ConfigService`.
+All required values are validated with Joi. The configuration factory uses Joi's
+normalized values, so `PORT` and `DB_PORT` are numbers and boolean flags accept
+both `true`/`false` and `TRUE`/`FALSE`. Raw `process.env` values remain strings.
+Application code consumes the typed configuration through Nest's `ConfigService`.
+
+The global exception filter preserves the original exception and stack in
+the request log's `err` field. HTTP 4xx responses log at `warn`, HTTP 5xx at
+`error`, and successful requests stay silent. Unexpected error details remain
+in server logs while the response uses the normalized error envelope.
 
 When the database preset is enabled, these database types are supported:
 

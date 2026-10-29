@@ -6,8 +6,8 @@ import { Create<%= classify(name) %>Response } from '../../responses/<%= dasheri
 export class Create<%= classify(name) %>Handler
   implements ICommandHandler<Create<%= classify(name) %>Command>
 {
-  async execute(command: Create<%= classify(name) %>Command): Promise<Create<%= classify(name) %>Response> {
+  execute(command: Create<%= classify(name) %>Command): Promise<Create<%= classify(name) %>Response> {
     void command.create<%= classify(name) %>Dto;
-    return { message: 'This action adds a new <%= dasherize(name) %>' };
+    return Promise.resolve({ message: 'This action adds a new <%= dasherize(name) %>' });
   }
 }

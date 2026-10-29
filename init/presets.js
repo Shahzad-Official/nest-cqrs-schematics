@@ -65,21 +65,33 @@ function applyDatabase(files, packageJson, databaseType) {
     `  cors: { enabled: boolean; origins: string[] };
   db: { type: 'postgres' | 'mysql' | 'mongodb'; host: string; port: number; username: string; password: string; database: string; ssl: boolean };`,
   );
+  files['src/config/env.config.types.ts'] = files['src/config/env.config.types.ts'].replace(
+    '  CORS_ORIGINS: string;',
+    `  CORS_ORIGINS: string;
+  DB_TYPE: 'postgres' | 'mysql' | 'mongodb';
+  DB_HOST: string;
+  DB_PORT: number;
+  DB_USERNAME: string;
+  DB_PASSWORD: string;
+  DB_NAME: string;
+  DB_SSL: boolean;`,
+  );
   files['src/config/env.d.ts'] = files['src/config/env.d.ts'].replace(
     '      CORS_ORIGINS: string;',
     `      CORS_ORIGINS: string;
       DB_TYPE: 'postgres' | 'mysql' | 'mongodb';
       DB_HOST: string;
-      DB_PORT: number;
+      DB_PORT: string;
       DB_USERNAME: string;
       DB_PASSWORD: string;
       DB_NAME: string;
-      DB_SSL: 'true' | 'false';`,
+      DB_SSL: string;`,
   );
+  // Older foundations read raw process.env; accept both raw and Joi-normalized values.
   files['src/config/configuration.ts'] = files['src/config/configuration.ts'].replace(
     '    cors: { enabled: corsEnabled, origins },',
     `    cors: { enabled: corsEnabled, origins },
-    db: { type: parsed.DB_TYPE, host: parsed.DB_HOST, port: parsed.DB_PORT, username: parsed.DB_USERNAME, password: parsed.DB_PASSWORD, database: parsed.DB_NAME, ssl: parsed.DB_SSL === 'true' },`,
+    db: { type: parsed.DB_TYPE, host: parsed.DB_HOST, port: Number(parsed.DB_PORT), username: parsed.DB_USERNAME, password: parsed.DB_PASSWORD, database: parsed.DB_NAME, ssl: String(parsed.DB_SSL).toLowerCase() === 'true' },`,
   );
   files['src/config/env.validation.ts'] = files['src/config/env.validation.ts'].replace(
     '});\n',
@@ -152,7 +164,7 @@ if (databaseType === 'mongodb') {
 const options: DataSourceOptions = {
   ...common,
   type: databaseType,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+  ssl: process.env.DB_SSL?.toLowerCase() === 'true' ? { rejectUnauthorized: true } : false,
 };
 
 export default new DataSource(options);

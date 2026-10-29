@@ -5,8 +5,8 @@ import { <%= classify(name) %>Query } from './<%= dasherize(name) %>.query<% if 
 export class <%= classify(name) %>Handler
   implements IQueryHandler<<%= classify(name) %>Query>
 {
-  async execute(query: <%= classify(name) %>Query): Promise<unknown> {
+  execute(query: <%= classify(name) %>Query): Promise<unknown> {
     void query;
-    return undefined;
+    return Promise.resolve(undefined);
   }
 }

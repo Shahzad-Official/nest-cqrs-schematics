@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { devDependencies, files, FOUNDATION_VERSION, removableDefaultFiles, runtimeDependencies } from './foundation.js';
+import { devDependencies, files, FOUNDATION_VERSION, removableDefaultFiles, runtimeDependenciesFor } from './foundation.js';
 import { GUIDANCE_FOUNDATION_VERSION, LEGACY_GUIDANCE_FOUNDATION_VERSION, legacyManagedBlocks, managedBlocks, mergeGuidanceFooter, renderGuidanceFiles, renderLegacyGuidanceFiles, replaceManagedBlock } from './guidance.js';
 import { applyPresets, PRESET_VERSION, presetNames } from './presets.js';
 
@@ -91,7 +91,7 @@ export function buildPlan(root, packageVersion, dummyFeature, selectedPresets = 
   const packagePath = resolve(root, 'package.json');
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
   const esm = usesEsmImports(root);
-  packageJson.dependencies = addMissing(packageJson.dependencies, runtimeDependencies);
+  packageJson.dependencies = addMissing(packageJson.dependencies, runtimeDependenciesFor(packageJson));
   delete packageJson.dependencies?.['@nestjs/platform-express'];
   packageJson.devDependencies = addMissing(packageJson.devDependencies, devDependencies);
   allowEmptyTestSuite(packageJson);
@@ -371,6 +371,7 @@ export async function addPresets({ root, names, dryRun, skipInstall, databaseOpt
   const originalPaths = new Set(Object.keys(generated));
   originalPaths.add('package.json');
   const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  runtimeDependenciesFor(packageJson);
   const applied = applyPresets({
     files: generated,
     packageJson,

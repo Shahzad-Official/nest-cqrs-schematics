@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { addPresets, approvePnpmBuilds, applyPlan, buildPlan, ensureGitignore, initialize, preflight } from './index.js';
 import { managedBlocks, renderLegacyGuidanceFiles } from './guidance.js';
+import { applyPresets } from './presets.js';
 
 function project(): string {
   const root = mkdtempSync(join(tmpdir(), 'nest-cqrs-init-'));
@@ -26,6 +27,56 @@ function project(): string {
 }
 
 describe('init foundation', () => {
+  it.each(['FALSE', 'TRUE', false, true])('supports raw and normalized database SSL values (%s) when adding a preset', (ssl) => {
+    const plan = buildPlan(project(), '0.1.0');
+    plan.generated['src/config/configuration.ts'] = `export function configuration() {
+  const parsed = process.env;
+  const corsEnabled = false;
+  const origins = [];
+  return {
+    cors: { enabled: corsEnabled, origins },
+  };
+}`;
+    applyPresets({ files: plan.generated, packageJson: JSON.parse(plan.generated['package.json']), selected: ['database'], databaseType: 'postgres' });
+    const evaluate = new Function('process', `${plan.generated['src/config/configuration.ts'].replace('export ', '')}; return configuration();`);
+    const result = evaluate({ env: { DB_PORT: typeof ssl === 'boolean' ? 5432 : '5432', DB_SSL: ssl } });
+    expect(result.db.port).toBe(5432);
+    expect(result.db.ssl).toBe(ssl === true || ssl === 'TRUE');
+  });
+
+  it.each([11, 12])('matches CQRS, Fastify and Swagger to Nest %s', (major) => {
+    const root = project();
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    packageJson.dependencies['@nestjs/core'] = `^${major}.0.1`;
+    packageJson.dependencies['@nestjs/common'] = `^${major}.0.1`;
+    packageJson.devDependencies['@nestjs/testing'] = `^${major}.0.1`;
+    writeFileSync(join(root, 'package.json'), JSON.stringify(packageJson));
+    const generated = JSON.parse(buildPlan(root, '0.1.0').generated['package.json']);
+    for (const name of ['@nestjs/cqrs', '@nestjs/platform-fastify', '@nestjs/swagger']) {
+      expect(generated.dependencies[name]).toBe(`^${major}.0.0`);
+    }
+    expect(generated.dependencies['@nestjs/core']).toBe(`^${major}.0.1`);
+  });
+
+  it.each(['@nestjs/common', '@nestjs/testing', '@nestjs/cqrs', '@nestjs/platform-fastify', '@nestjs/swagger'])('rejects an incompatible %s before writing files', (name) => {
+    const root = project();
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    packageJson.dependencies[name] = '^11.0.0';
+    const original = JSON.stringify(packageJson);
+    writeFileSync(join(root, 'package.json'), original);
+    expect(() => buildPlan(root, '0.1.0')).toThrow(`${name} (^11.0.0) is incompatible`);
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(original);
+    expect(readFileSync(join(root, 'src/main.ts'), 'utf8')).toBe('default');
+  });
+
+  it.each(['^10.0.0', 'latest', '^11.0.0 || ^12.0.0'])('rejects unsupported or ambiguous Nest versions (%s)', (version) => {
+    const root = project();
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    packageJson.dependencies['@nestjs/core'] = version;
+    writeFileSync(join(root, 'package.json'), JSON.stringify(packageJson));
+    expect(() => buildPlan(root, '0.1.0')).toThrow(/Nest.*(supported|explicit)/);
+  });
+
   describe('.gitignore preservation', () => {
     const entries = ['.env', '.env.development', '.env.staging', '.env.production', '.nest-cqrs.pending.json'];
 
@@ -250,7 +301,7 @@ describe('init foundation', () => {
     expect(plan.generated['src/config/env.validation.ts']).not.toContain('APP_ENV');
     expect(plan.generated['src/config/env-file-path.ts']).toContain('process.env.NODE_ENV');
     expect(plan.generated['src/config/env-file-path.ts']).not.toContain('APP_ENV');
-    expect(plan.generated['src/config/configuration.ts']).toContain('const parsed = process.env;');
+    expect(plan.generated['src/config/configuration.ts']).toContain('envValidationSchema.validate(process.env');
     expect(plan.generated['src/config/configuration.ts']).toContain('env: parsed.NODE_ENV');
     expect(plan.generated['src/config/configuration.ts']).not.toContain('Number(process.env');
     expect(plan.generated['src/config/configuration.ts']).not.toContain('as EnvConfig[');
@@ -259,7 +310,7 @@ describe('init foundation', () => {
     const logging = plan.generated['src/common/logging/http-logger.options.ts'];
     expect(logging).toContain("import type { Options } from 'pino-http'");
     expect(logging).toContain('httpLoggerOptions: Options');
-    expect(logging).toContain("if (response.statusCode >= 500 || error) return 'error'");
+    expect(logging).toContain("if (response.statusCode >= 500) return 'error'");
     expect(logging).toContain("if (response.statusCode >= 400) return 'warn'");
     expect(logging).toContain("return 'silent'");
     expect(logging).toContain("'HTTP request completed with client error'");
@@ -276,6 +327,7 @@ describe('init foundation', () => {
     expect(loggingTest).toContain("[500, 'HTTP request completed with server error']");
     expect(loggingTest).toContain("'HTTP request failed'");
     expect(plan.generated['src/common/filters/global-exception.filter.ts']).not.toContain('logger.error');
+    expect(plan.generated['src/common/filters/global-exception.filter.ts']).toContain('Object.assign(response.raw, { err: exception })');
     expect(plan.generated['src/common/filters/global-exception.filter.ts']).not.toContain('requestLogErrorType');
     expect(plan.generated['src/common/filters/global-exception.filter.ts']).not.toContain('request.routeOptions.url');
     expect(plan.generated['src/common/interceptors/response.interceptor.ts']).not.toContain('request.routeOptions.url');

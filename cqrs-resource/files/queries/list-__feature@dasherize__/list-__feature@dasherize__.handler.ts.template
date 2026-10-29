@@ -6,7 +6,7 @@ import { List<%= classify(feature) %>Response } from '../../responses/<%= dasher
 export class List<%= classify(feature) %>Handler
   implements IQueryHandler<List<%= classify(feature) %>Query>
 {
-  async execute(): Promise<List<%= classify(feature) %>Response> {
-    return { message: 'This action returns all <%= dasherize(feature) %>' };
+  execute(): Promise<List<%= classify(feature) %>Response> {
+    return Promise.resolve({ message: 'This action returns all <%= dasherize(feature) %>' });
   }
 }

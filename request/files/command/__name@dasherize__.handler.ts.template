@@ -5,7 +5,8 @@ import { <%= classify(name) %>Command } from './<%= dasherize(name) %>.command<%
 export class <%= classify(name) %>Handler
   implements ICommandHandler<<%= classify(name) %>Command>
 {
-  async execute(command: <%= classify(name) %>Command): Promise<void> {
+  execute(command: <%= classify(name) %>Command): Promise<void> {
     void command;
+    return Promise.resolve();
   }
 }

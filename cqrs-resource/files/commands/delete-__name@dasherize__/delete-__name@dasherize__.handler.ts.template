@@ -6,7 +6,7 @@ import { Delete<%= classify(name) %>Response } from '../../responses/<%= dasheri
 export class Delete<%= classify(name) %>Handler
   implements ICommandHandler<Delete<%= classify(name) %>Command>
 {
-  async execute(command: Delete<%= classify(name) %>Command): Promise<Delete<%= classify(name) %>Response> {
-    return { message: `This action removes a #${command.id} <%= dasherize(name) %>` };
+  execute(command: Delete<%= classify(name) %>Command): Promise<Delete<%= classify(name) %>Response> {
+    return Promise.resolve({ message: `This action removes a #${command.id} <%= dasherize(name) %>` });
   }
 }

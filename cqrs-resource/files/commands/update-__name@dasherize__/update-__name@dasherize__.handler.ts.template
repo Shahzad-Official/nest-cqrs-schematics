@@ -6,8 +6,8 @@ import { Update<%= classify(name) %>Response } from '../../responses/<%= dasheri
 export class Update<%= classify(name) %>Handler
   implements ICommandHandler<Update<%= classify(name) %>Command>
 {
-  async execute(command: Update<%= classify(name) %>Command): Promise<Update<%= classify(name) %>Response> {
+  execute(command: Update<%= classify(name) %>Command): Promise<Update<%= classify(name) %>Response> {
     void command.update<%= classify(name) %>Dto;
-    return { message: `This action updates a #${command.id} <%= dasherize(name) %>` };
+    return Promise.resolve({ message: `This action updates a #${command.id} <%= dasherize(name) %>` });
   }
 }

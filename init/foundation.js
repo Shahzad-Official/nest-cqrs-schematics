@@ -17,6 +17,30 @@ export const runtimeDependencies = {
   'pino-http': '^11.0.0',
 };
 
+export function runtimeDependenciesFor(packageJson) {
+  const existing = { ...packageJson.devDependencies, ...packageJson.dependencies };
+  const majorOf = (name) => {
+    const version = existing[name];
+    const match = typeof version === 'string' && version.match(/^[~^]?(\d+)(?:\.\d+){0,2}$/);
+    if (!match) throw new Error(`Cannot determine the Nest major from ${name}: ${version}. Use an explicit Nest 11 or 12 version range.`);
+    return Number(match[1]);
+  };
+  const major = majorOf('@nestjs/core');
+  if (![11, 12].includes(major)) throw new Error(`Nest ${major} is not supported. Use a Nest 11 or 12 project.`);
+  const matched = ['@nestjs/common', '@nestjs/testing', '@nestjs/cqrs', '@nestjs/platform-fastify', '@nestjs/swagger'];
+  for (const name of matched) {
+    if (existing[name] && majorOf(name) !== major) {
+      throw new Error(`${name} (${existing[name]}) is incompatible with @nestjs/core (${existing['@nestjs/core']}). Align the Nest major versions before generation.`);
+    }
+  }
+  return {
+    ...runtimeDependencies,
+    '@nestjs/cqrs': `^${major}.0.0`,
+    '@nestjs/platform-fastify': `^${major}.0.0`,
+    '@nestjs/swagger': `^${major}.0.0`,
+  };
+}
+
 export const devDependencies = {
   'pino-pretty': '^13.0.0',
 };
@@ -216,8 +240,9 @@ export class ApiErrorResponse {
 
 export const httpLoggerOptions: Options = {
   customLogLevel(_request, response, error) {
-    if (response.statusCode >= 500 || error) return 'error';
+    if (response.statusCode >= 500) return 'error';
     if (response.statusCode >= 400) return 'warn';
+    if (error) return 'error';
     return 'silent';
   },
   customSuccessMessage: (_request, response) =>
@@ -239,6 +264,7 @@ describe('httpLoggerOptions', () => {
     [400, undefined, 'warn'],
     [404, undefined, 'warn'],
     [429, undefined, 'warn'],
+    [400, new Error('invalid request'), 'warn'],
     [500, undefined, 'error'],
     [200, new Error('unexpected'), 'error'],
   ] as const)('maps status %s to %s request logging', (statusCode, error, level) => {
@@ -273,6 +299,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const request = http.getRequest<FastifyRequest>();
     const response = http.getResponse<FastifyReply>();
+    // Pino reads the original error from the raw response, including guard failures.
+    Object.assign(response.raw, { err: exception });
     const statusCode = exception instanceof HttpException
       ? exception.getStatus()
       : HttpStatus.INTERNAL_SERVER_ERROR;
@@ -371,11 +399,11 @@ export interface PaginatedResult<T> {
   meta: PaginationMeta;
 }
 `,
-  'src/config/env-file-path.ts': `const nodeEnvironments = ['development', 'staging', 'production', 'test'] as const;
+  'src/config/env-file-path.ts': `const nodeEnvironments = ['development', 'staging', 'production', 'test'];
 
 export function envFilePath(): string[] {
   const nodeEnv = process.env.NODE_ENV ?? 'development';
-  if (!nodeEnvironments.includes(nodeEnv as (typeof nodeEnvironments)[number])) {
+  if (!nodeEnvironments.includes(nodeEnv)) {
     throw new Error('NODE_ENV must be development, staging, production, or test');
   }
   return [\`.env.\${nodeEnv}\`, '.env'];
@@ -387,11 +415,11 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       NODE_ENV: 'development' | 'staging' | 'production' | 'test';
-      PORT: number;
+      PORT: string;
       API_PREFIX: string;
-      SWAGGER_ENABLED: 'true' | 'false';
+      SWAGGER_ENABLED: string;
       LOG_LEVEL: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
-      CORS_ENABLED: 'true' | 'false';
+      CORS_ENABLED: string;
       CORS_ORIGINS: string;
     }
   }
@@ -405,26 +433,40 @@ declare global {
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
   cors: { enabled: boolean; origins: string[] };
 };
+
+export interface EnvironmentVariables {
+  NODE_ENV: EnvConfig['env'];
+  PORT: number;
+  API_PREFIX: string;
+  SWAGGER_ENABLED: boolean;
+  LOG_LEVEL: EnvConfig['logLevel'];
+  CORS_ENABLED: boolean;
+  CORS_ORIGINS: string;
+}
 `,
   'src/config/configuration.ts': `import { EnvConfig } from './env.config.types';
+import { envValidationSchema } from './env.validation';
 
 export function configuration(): EnvConfig {
-  const parsed = process.env;
-  const corsEnabled = parsed.CORS_ENABLED === 'true';
+  const result = envValidationSchema.validate(process.env, { allowUnknown: true, abortEarly: false });
+  if (result.error) throw new Error(\`Config validation error: \${result.error.message}\`);
+  const parsed = result.value;
+  const corsEnabled = parsed.CORS_ENABLED;
   const origins = parsed.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean);
   return {
     env: parsed.NODE_ENV,
     port: parsed.PORT,
     apiPrefix: parsed.API_PREFIX,
-    swaggerEnabled: parsed.SWAGGER_ENABLED === 'true',
+    swaggerEnabled: parsed.SWAGGER_ENABLED,
     logLevel: parsed.LOG_LEVEL,
     cors: { enabled: corsEnabled, origins },
   };
 }
 `,
   'src/config/env.validation.ts': `import Joi from 'joi';
+import { EnvironmentVariables } from './env.config.types';
 
-export const envValidationSchema = Joi.object({
+export const envValidationSchema = Joi.object<EnvironmentVariables>({
   NODE_ENV: Joi.string().valid('development', 'staging', 'production', 'test').required(),
   PORT: Joi.number().required(),
   API_PREFIX: Joi.string().required(),
